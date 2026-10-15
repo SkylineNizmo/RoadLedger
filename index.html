@@ -224,8 +224,38 @@ function startRoadLedgerVoice() {
   };
 
   recognition.onresult = (event) => {
-    const spoken = event.results[0][0].transcript;
-    result.textContent = "You said: " + spoken;
+const spoken = event.results[0][0].transcript;
+result.textContent = "You said: " + spoken;
+
+const pickup = spoken.match(
+  /(?:pickup in|picked up in|from)\s+(.+?)(?=\s+(?:delivery in|delivering to|to)\s+|,?\s+(?:paying|for)\s+\$?\d|$)/i
+);
+
+const delivery = spoken.match(
+  /(?:delivery in|delivering to|to)\s+(.+?)(?=,?\s+(?:paying|for)\s+\$?\d|$)/i
+);
+
+const pay = spoken.match(
+  /(?:paying|for)\s+\$?([\d,]+(?:\.\d{1,2})?)/i
+);
+
+if (pickup) {
+  document.getElementById("pickup").value =
+    pickup[1].trim().replace(/,$/, "");
+}
+
+if (delivery) {
+  document.getElementById("delivery").value =
+    delivery[1].trim().replace(/,$/, "");
+}
+
+if (pay) {
+  document.getElementById("pay").value =
+    pay[1].replace(/,/g, "");
+}
+
+result.textContent +=
+  "\nPlease review the load details and tap Save Load to confirm.";
   };
 
   recognition.onerror = (event) => {
