@@ -226,17 +226,17 @@ function startRoadLedgerVoice() {
   recognition.onresult = (event) => {
 const spoken = event.results[0][0].transcript;
 result.textContent = "You said: " + spoken;
-
+// Recognize pickup, delivery, and payment
 const pickup = spoken.match(
-  /(?:pickup in|picked up in|from)\s+(.+?)(?=\s+(?:delivery in|delivering to|to)\s+|,?\s+(?:paying|for)\s+\$?\d|$)/i
+  /(?:picking up a load in|picking up in|picked up in|pickup in|from|load in)\s+(.+?)(?=,?\s+(?:heading to|delivering to|delivery in|going to|to)\s+|[.!?]|$)/i
 );
 
 const delivery = spoken.match(
-  /(?:delivery in|delivering to|to)\s+(.+?)(?=,?\s+(?:paying|for)\s+\$?\d|$)/i
+  /(?:heading to|delivering to|delivery in|going to|to)\s+(.+?)(?=,?\s*(?:load pays?|it pays?|paying|pays?|mileage|pickup date|it picks up)\b|[.!?]|$)/i
 );
 
 const pay = spoken.match(
-  /(?:paying|for)\s+\$?([\d,]+(?:\.\d{1,2})?)/i
+  /(?:load pays?|it pays?|paying|pays?)\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i
 );
 
 if (pickup) {
