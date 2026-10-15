@@ -253,7 +253,36 @@ if (pay) {
   document.getElementById("pay").value =
     pay[1].replace(/,/g, "");
 }
+// Recognize mileage, such as "250 miles"
+const mileage = spoken.match(
+  /([\d,]+)\s*(?:miles|mi)\b/i
+);
 
+if (mileage) {
+  document.getElementById("distance").value =
+    mileage[1].replace(/,/g, "");
+}
+
+// Recognize dates, such as "October 16, 2026"
+const dateMatch = spoken.match(
+  /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\b/i
+);
+
+if (dateMatch) {
+  const dateText = dateMatch[0].replace(
+    /(\d+)(st|nd|rd|th)/i, "$1"
+  );
+  const parsed = new Date(dateText);
+
+  if (!isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+
+    document.getElementById("date").value =
+      `${year}-${month}-${day}`;
+  }
+}
 result.textContent +=
   "\nPlease review the load details and tap Save Load to confirm.";
   };
