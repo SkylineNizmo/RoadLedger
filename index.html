@@ -201,6 +201,47 @@ function render(){
  });
 }
 render();
+function startRoadLedgerVoice() {
+  const result = document.getElementById("voiceResult");
+  const button = document.getElementById("voiceButton");
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    result.textContent =
+      "Speech recognition isn't supported in this browser.";
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    button.textContent = "🎤 Listening...";
+    result.textContent = "Go ahead, I'm listening.";
+  };
+
+  recognition.onresult = (event) => {
+    const spoken = event.results[0][0].transcript;
+    result.textContent = "You said: " + spoken;
+  };
+
+  recognition.onerror = (event) => {
+    result.textContent = "Microphone error: " + event.error;
+  };
+
+  recognition.onend = () => {
+    button.textContent = "🎤 Start listening";
+  };
+
+  try {
+    recognition.start();
+  } catch (error) {
+    result.textContent = "Unable to start microphone: " + error.message;
+  }
+}
 </script>
 </body>
 </html>
