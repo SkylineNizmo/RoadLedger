@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10243a">
+<title>RoadLedger</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#edf2f7;color:#172b42;font-family:Arial,sans-serif}
+header{background:#10243a;color:#fff;padding:24px 18px}
+header h1{margin:0;font-size:29px}header p{margin:8px 0 0;color:#c9d7e5}
+main{max-width:700px;margin:auto;padding:16px}
+.card{background:#fff;border-radius:15px;padding:18px;margin-bottom:16px;box-shadow:0 2px 9px #0001}
+h2{font-size:19px;margin:0 0 15px}
+label{display:block;font-weight:bold;margin:12px 0 5px}
+input,select{display:block;width:100%;max-width:100%;min-width:0;height:46px;padding:10px 12px;border:1px solid #c8d2dc;border-radius:9px;font-size:16px;background:#fff;color:#172b42}
+/* Keep iPhone Safari's date picker the same size as other fields. */
+input[type="date"]{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  height:46px;
+  min-height:46px;
+  max-height:46px;
+  padding:10px 12px;
+  margin:0;
+  border:1px solid #c8d2dc;
+  border-radius:9px;
+  box-sizing:border-box;
+  -webkit-appearance:none;
+  appearance:none;
+  background-color:#fff;
+  font:inherit;
+  font-size:16px;
+  line-height:24px;
+}
+input[type="date"]::-webkit-date-and-time-value{min-height:24px;text-align:left}
+button{background:#1473cf;color:white;border:0;border-radius:9px;padding:13px 17px;font-size:16px;font-weight:bold;cursor:pointer}
+button:active{opacity:.8}.secondary{background:#e6edf5;color:#16334f}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#eaf3ff;border-radius:10px;padding:13px}.stat strong{display:block;font-size:22px;margin-top:6px}
+small,.muted{color:#64748b}.load{border-top:1px solid #e2e8f0;padding:13px 0}.load strong{display:block}.load button{font-size:13px;padding:8px;margin-top:8px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.row>div{min-width:0}
+.notice{background:#fff7e4;padding:12px;border-radius:9px;font-size:13px}
+#voiceResult{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+#voiceButton{width:100%}
+@media(max-width:600px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>🚛 RoadLedger</h1><p>Your trucking dashboard</p></header>
+<main>
+<section class="card"><h2>Dashboard</h2><div class="stats">
+<div class="stat">Total load pay<strong id="gross">$0.00</strong></div>
+<div class="stat">Your earnings<strong id="earned">$0.00</strong></div>
+<div class="stat">Loads logged<strong id="count">0</strong></div>
+<div class="stat">Total miles<strong id="miles">0</strong></div>
+</div></section>
+<section class="card"><h2>Equipment</h2>
+<label for="truck">Truck</label><input id="truck" placeholder="Example: Truck #8">
+<label for="trailer">Trailer</label><input id="trailer" placeholder="Example: Trailer #474">
+<button id="saveEquipment" type="button" style="margin-top:14px">Save equipment</button>
+</section>
+<section class="card"><h2>Add a load</h2>
+<form id="loadForm">
+<label for="pickup">Pickup location</label><input id="pickup" placeholder="City, State" required>
+<label for="delivery">Delivery location</label><input id="delivery" placeholder="City, State" required>
+<label for="date">Pickup date</label><input id="date" type="date" required>
+<label for="pay">Load pay ($)</label><input id="pay" type="number" min="0" step=".01" required>
+<div class="row"><div><label for="distance">Miles</label><input id="distance" type="number" min="0" step=".1" placeholder="Optional"></div>
+<div><label for="rate">Driver %</label><input id="rate" type="number" min="0" max="100" step=".1" value="25" required></div></div>
+<label for="status">Payment status</label><select id="status"><option>Pending</option><option>Partially paid</option><option>Paid</option></select>
+<button type="submit" style="width:100%;margin-top:18px">Save Load</button>
+</form></section>
+<section class="card"><h2>Saved loads</h2><div id="loadList" class="muted">No loads yet.</div></section>
+<section class="card"><h2>Voice assistant</h2>
+<button type="button" id="voiceButton">🎤 Start listening</button>
+<p id="voiceResult" aria-live="polite">Tap the microphone and describe a load. Review the fields before saving.</p>
+<p class="muted">Voice entry fills the form for your review. Spoken confirmation and continuous hands-free conversation are not available yet.</p>
+<div class="notice">This prototype saves data only in this browser. Clearing website data or removing the app may erase your records. Keep a separate business record.</div>
+</section>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+// Keep the original key and load object format to preserve existing records.
+const key = 'roadledger-v1';
+let data;
+try { data = JSON.parse(localStorage.getItem(key)) || {}; } catch (e) { data = {}; }
+data.loads = Array.isArray(data.loads) ? data.loads : [];
+data.truck = data.truck || '';
+data.trailer = data.trailer || '';
+$('truck').value = data.truck;
+$('trailer').value = data.trailer;
+function todayLocal() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+$('date').value = todayLocal();
+const money = n => Number(n || 0).toLocaleString('en-US',{style:'currency',currency:'USD'});
+function save() {
+  try { localStorage.setItem(key,JSON.stringify(data)); return true; }
+  catch (e) { alert('Unable to save on this device.'); return false; }
+}
+$('saveEquipment').onclick = () => {
+  data.truck = $('truck').value.trim();
+  data.trailer = $('trailer').value.trim();
+  if (save()) alert('Equipment saved on this device.');
+};
+$('loadForm').onsubmit = e => {
+  e.preventDefault();
+  const load = {
+    id:Date.now()+'-'+Math.random(),
+    pickup:$('pickup').value.trim(), delivery:$('delivery').value.trim(),
+    date:$('date').value, pay:Number($('pay').value),
+    miles:Number($('distance').value || 0), rate:Number($('rate').value),
+    status:$('status').value, truck:$('truck').value.trim(), trailer:$('trailer').value.trim()
+  };
+  if (!load.pickup || !load.delivery || !load.date || !Number.isFinite(load.pay) || load.pay < 0 ||
+      !Number.isFinite(load.miles) || load.miles < 0 || !Number.isFinite(load.rate) || load.rate < 0 || load.rate > 100) {
+    alert('Please check the load details.'); return;
+  }
+  data.loads.unshift(load);
+  if (!save()) { data.loads.shift(); return; }
+  render(); $('loadForm').reset(); $('date').value = todayLocal(); $('rate').value = '25';
+  alert('Load saved!');
+};
+function render() {
+  const loads = data.loads;
+  $('gross').textContent = money(loads.reduce((s,l) => s + Number(l.pay || 0),0));
+  $('earned').textContent = money(loads.reduce((s,l) => s + Number(l.pay || 0)*Number(l.rate || 0)/100,0));
+  $('count').textContent = loads.length;
+  $('miles').textContent = loads.reduce((s,l) => s + Number(l.miles || 0),0).toLocaleString();
+  const list = $('loadList'); list.replaceChildren();
+  if (!loads.length) { list.textContent = 'No loads yet.'; return; }
+  loads.forEach(l => {
+    const div = document.createElement('div'); div.className = 'load';
+    const title = document.createElement('strong'); title.textContent = l.pickup+' → '+l.delivery;
+    const details = document.createElement('p'); details.textContent = l.date+' | '+money(l.pay)+' | '+l.miles+' mi';
+    const info = document.createElement('small');
+    info.textContent = 'Your share: '+money(Number(l.pay||0)*Number(l.rate||0)/100)+' ('+l.rate+'%) | '+l.status+' | '+(l.truck||'No truck')+' / '+(l.trailer||'No trailer');
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary'; remove.textContent = 'Delete load';
+    remove.onclick = () => {
+      if (confirm('Delete this load?')) {
+        const old = data.loads;
+        data.loads = data.loads.filter(x => x.id !== l.id);
+        if (!save()) { data.loads = old; return; }
+        render();
+      }
+    };
+    div.append(title,details,info,document.createElement('br'),remove); list.append(div);
+  });
+}
+render();
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let activeRecognition = null;
+const voiceButton = $('voiceButton');
+const voiceResult = $('voiceResult');
+const monthNames = 'January February March April May June July August September October November December'.split(' ');
+function parseSpokenDate(s) {
+  const monthPattern = monthNames.join('|');
+  const m = s.match(new RegExp('\\b('+monthPattern+')\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b','i'));
+  if (!m) return null;
+  const month = monthNames.findIndex(x => x.toLowerCase() === m[1].toLowerCase()) + 1;
+  const day = Number(m[2]); const year = m[3] ? Number(m[3]) : new Date().getFullYear();
+  const d = new Date(year,month-1,day);
+  if (d.getFullYear() !== year || d.getMonth() !== month-1 || d.getDate() !== day) return null;
+  return year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+function fillFromSpeech(spoken) {
+  // Detect section boundaries first so dates and pay never leak into delivery.
+  const pickupIntro = /\b(?:picking up (?:a )?load in|picking up (?:a )?load (?:from|at)|picking up in|picked up (?:a )?load in|picked up in|pickup (?:location )?(?:is|in|at)|(?:i have )?a load (?:in|from)|load (?:in|from)|from)\s+/i;
+  const deliveryIntro = /\b(?:heading to|headed to|delivering to|delivery (?:location )?(?:is|in|to)|going to|destination (?:is|in)|bound for|to)\s+/i;
+  const payIntro = /\b(?:the )?(?:load )?(?:pays?|paying|payment is|rate is|gross is|gross pay is|for)\s*(?:me\s*)?(?:is\s*)?\$?\s*([\d,]+(?:\.\d{1,2})?)\b/i;
+  const mileageIntro = /\b(?:mileage|distance|total miles|miles)\s*(?:is|are|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i;
+  const milesAfter = /\b([\d,]+(?:\.\d+)?)\s*miles?\b/i;
+  const dateIntro = /\b(?:it picks up on|picks up on|pickup date(?: is)?|pick up date(?: is)?|pickup on|picking up on|on)\s+/i;
+  const monthDate = new RegExp('\\b(?:'+monthNames.join('|')+')\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?\\b','i');
+  const pay = payIntro.exec(spoken);
+  const mileage = mileageIntro.exec(spoken) || milesAfter.exec(spoken);
+  const date = monthDate.exec(spoken);
+  const pickup = pickupIntro.exec(spoken);
+  const delivery = deliveryIntro.exec(spoken);
+  const boundary = [pay,mileage,date].filter(Boolean).map(x => x.index);
+  const clean = s => s.replace(/^[\s,.!?;:]+|[\s,.!?;:]+$/g,'').replace(/\s+(?:and|then)$/i,'').trim();
+  const filled = [];
+  if (pickup && delivery && delivery.index >= pickup.index + pickup[0].length) {
+    const p = clean(spoken.slice(pickup.index+pickup[0].length,delivery.index));
+    const end = Math.min(spoken.length,...boundary.filter(i => i > delivery.index));
+    const d = clean(spoken.slice(delivery.index+delivery[0].length,end));
+    if (p) { $('pickup').value = p; filled.push('pickup'); }
+    if (d) { $('delivery').value = d; filled.push('delivery'); }
+  }
+  if (pay) { $('pay').value = pay[1].replace(/,/g,''); filled.push('pay'); }
+  if (mileage) { $('distance').value = mileage[1].replace(/,/g,''); filled.push('mileage'); }
+  if (date) { const value = parseSpokenDate(date[0]); if (value) { $('date').value = value; filled.push('date'); } }
+  return filled;
+}
+function startRoadLedgerVoice() {
+  if (activeRecognition) { activeRecognition.stop(); return; }
+  if (!SpeechRecognition) { voiceResult.textContent = 'Speech recognition is not supported in this browser.'; return; }
+  const recognition = new SpeechRecognition(); activeRecognition = recognition;
+  recognition.lang = 'en-US'; recognition.interimResults = false; recognition.maxAlternatives = 1;
+  recognition.onstart = () => { voiceButton.textContent = '⏹ Stop listening'; voiceResult.textContent = 'Listening...'; };
+  recognition.onresult = event => {
+    const spoken = event.results[0][0].transcript;
+    const filled = fillFromSpeech(spoken);
+    voiceResult.textContent = 'You said: '+spoken+'\n\n'+(filled.length ? 'Filled: '+filled.join(', ')+'.' : 'I could not identify load details.')+'\nReview every field and tap Save Load to confirm. Nothing was saved automatically.';
+  };
+  recognition.onerror = event => { voiceResult.textContent = 'Microphone error: '+event.error; };
+  recognition.onend = () => { if (activeRecognition === recognition) activeRecognition = null; voiceButton.textContent = '🎤 Start listening'; };
+  try { recognition.start(); } catch(e) { activeRecognition = null; voiceButton.textContent = '🎤 Start listening'; voiceResult.textContent = 'Unable to start microphone: '+e.message; }
+}
+voiceButton.addEventListener('click',startRoadLedgerVoice);
+window.addEventListener('pagehide',() => { if (activeRecognition) { activeRecognition.abort(); activeRecognition = null; } });
+</script>
+</body>
+</html>
