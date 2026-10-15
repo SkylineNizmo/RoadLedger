@@ -1,12 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RoadLedger</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10243a">
+<title>RoadLedger</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#edf2f7;color:#172b42;font-family:Arial,sans-serif}
+header{background:#10243a;color:white;padding:24px 18px}
+header h1{margin:0;font-size:29px}
+header p{margin:8px 0 0;color:#c9d7e5}
+main{max-width:700px;margin:auto;padding:16px}
+.card{background:white;border-radius:15px;padding:18px;margin-bottom:16px;box-shadow:0 2px 9px #0001}
+h2{font-size:19px;margin:0 0 15px}
+label{display:block;font-weight:bold;margin:12px 0 5px}
+input,select{width:100%;padding:12px;border:1px solid #c8d2dc;border-radius:9px;font-size:16px;background:white}
+button{background:#1473cf;color:white;border:0;border-radius:9px;padding:13px 17px;font-size:16px;font-weight:bold;cursor:pointer}
+button:active{opacity:.8}
+.secondary{background:#e6edf5;color:#16334f}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#eaf3ff;border-radius:10px;padding:13px}
+.stat strong{display:block;font-size:22px;margin-top:6px}
+small,.muted{color:#64748b}
+.load{border-top:1px solid #e2e8f0;padding:13px 0}
+.load strong{display:block}
+.load button{font-size:13px;padding:8px;margin-top:8px}
+.row{display:flex;gap:10px}
+.row>div{flex:1;min-width:0}
+.notice{background:#fff7e4;padding:12px;border-radius:9px;font-size:13px}
+</style>
 </head>
 <body>
-  <h1>RoadLedger</h1>
-  <p>Your trucking assistant is coming to life!</p>
+<header>
+<h1>🚛 RoadLedger</h1>
+<p>Your trucking dashboard</p>
+</header>
+<main>
+<section class="card">
+<h2>Dashboard</h2>
+<div class="stats">
+<div class="stat">Total load pay<strong id="gross">$0.00</strong></div>
+<div class="stat">Your earnings<strong id="earned">$0.00</strong></div>
+<div class="stat">Loads logged<strong id="count">0</strong></div>
+<div class="stat">Total miles<strong id="miles">0</strong></div>
+</div>
+</section>
+
+<section class="card">
+<h2>Equipment</h2>
+<label for="truck">Truck</label>
+<input id="truck" placeholder="Example: Truck #8">
+<label for="trailer">Trailer</label>
+<input id="trailer" placeholder="Example: Trailer #474">
+<button id="saveEquipment" style="margin-top:14px">Save equipment</button>
+</section>
+
+<section class="card">
+<h2>Add a load</h2>
+<form id="loadForm">
+<label for="pickup">Pickup location</label>
+<input id="pickup" placeholder="City, State" required>
+<label for="delivery">Delivery location</label>
+<input id="delivery" placeholder="City, State" required>
+<div class="row">
+<div>
+<label for="date">Pickup date</label>
+<input id="date" type="date" required>
+</div>
+<div>
+<label for="pay">Load pay ($)</label>
+<input id="pay" type="number" min="0" step=".01" required>
+</div>
+</div>
+<div class="row">
+<div>
+<label for="distance">Miles</label>
+<input id="distance" type="number" min="0" step=".1" placeholder="Optional">
+</div>
+<div>
+<label for="rate">Driver %</label>
+<input id="rate" type="number" min="0" max="100" step=".1" value="25" required>
+</div>
+</div>
+<label for="status">Payment status</label>
+<select id="status">
+<option>Pending</option>
+<option>Partially paid</option>
+<option>Paid</option>
+</select>
+<button type="submit" style="width:100%;margin-top:18px">Save load</button>
+</form>
+</section>
+
+<section class="card">
+<h2>Saved loads</h2>
+<div id="loadList" class="muted">No loads yet.</div>
+</section>
+
+<section class="card">
+<h2>Voice assistant</h2>
+<p class="muted">Conversational voice control is planned for a future version.</p>
+<div class="notice">This prototype saves data only in this browser. Clearing website data or removing the app may erase your records. Don't rely on it as your only business record yet.</div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const key="roadledger-v1";
+let data;
+try{
+ data=JSON.parse(localStorage.getItem(key))||{};
+}catch(e){data={};}
+data.loads=Array.isArray(data.loads)?data.loads:[];
+data.truck=data.truck||"";
+data.trailer=data.trailer||"";
+$("truck").value=data.truck;
+$("trailer").value=data.trailer;
+$("date").value=new Date().toLocaleDateString("en-CA");
+const money=n=>Number(n).toLocaleString("en-US",{style:"currency",currency:"USD"});
+function save(){
+ try{localStorage.setItem(key,JSON.stringify(data));}
+ catch(e){alert("Unable to save on this device.");}
+}
+$("saveEquipment").onclick=()=>{
+ data.truck=$("truck").value.trim();
+ data.trailer=$("trailer").value.trim();
+ save();
+ alert("Equipment saved on this device.");
+};
+$("loadForm").onsubmit=e=>{
+ e.preventDefault();
+ const load={
+ id:Date.now()+"-"+Math.random(),
+ pickup:$("pickup").value.trim(),
+ delivery:$("delivery").value.trim(),
+ date:$("date").value,
+ pay:Number($("pay").value),
+ miles:Number($("distance").value||0),
+ rate:Number($("rate").value),
+ status:$("status").value,
+ truck:$("truck").value.trim(),
+ trailer:$("trailer").value.trim()
+ };
+ if(!load.pickup||!load.delivery||!Number.isFinite(load.pay)||load.pay<0||!Number.isFinite(load.miles)||load.miles<0||!Number.isFinite(load.rate)||load.rate<0||load.rate>100){
+ alert("Please check the load details.");return;
+ }
+ data.loads.unshift(load);
+ save();render();
+ $("loadForm").reset();
+ $("date").value=new Date().toLocaleDateString("en-CA");
+ $("rate").value="25";
+ alert("Load saved!");
+};
+function render(){
+ const loads=data.loads;
+ const total=loads.reduce((s,l)=>s+l.pay,0);
+ const earned=loads.reduce((s,l)=>s+l.pay*l.rate/100,0);
+ $("gross").textContent=money(total);
+ $("earned").textContent=money(earned);
+ $("count").textContent=loads.length;
+ $("miles").textContent=loads.reduce((s,l)=>s+l.miles,0).toLocaleString();
+ const list=$("loadList");
+ list.replaceChildren();
+ if(!loads.length){list.textContent="No loads yet.";return;}
+ loads.forEach(l=>{
+ const div=document.createElement("div");
+ div.className="load";
+ const title=document.createElement("strong");
+ title.textContent=l.pickup+" → "+l.delivery;
+ const details=document.createElement("p");
+ details.textContent=l.date+" | "+money(l.pay)+" | "+l.miles+" mi";
+ const info=document.createElement("small");
+ info.textContent="Your share: "+money(l.pay*l.rate/100)+" ("+l.rate+"%) | "+l.status+" | "+(l.truck||"No truck")+" / "+(l.trailer||"No trailer");
+ const remove=document.createElement("button");
+ remove.className="secondary";
+ remove.textContent="Delete load";
+ remove.onclick=()=>{
+ if(confirm("Delete this load?")){
+ data.loads=data.loads.filter(x=>x.id!==l.id);
+ save();render();
+ }
+ };
+ div.append(title,details,info,document.createElement("br"),remove);
+ list.append(div);
+ });
+}
+render();
+</script>
 </body>
 </html>
