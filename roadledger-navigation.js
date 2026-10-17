@@ -1,56 +1,35 @@
-/* =====================================
-   ROADLEDGER NAVIGATION SYSTEM
-   Active Tab Highlight
-   ===================================== */
+/* RoadLedger Navigation Highlight Fix */
 
 (function () {
   "use strict";
 
-  function updateActiveTab(clickedButton) {
+  function updateActiveTab(name) {
 
-    // Find the navigation area.
-    const navigation = clickedButton.closest("nav");
+    document.querySelectorAll("[data-tab]").forEach(function (button) {
 
-    if (!navigation) return;
+      const active = button.dataset.tab === name;
 
-    // Find all navigation buttons.
-    const buttons = navigation.querySelectorAll("button");
-
-    // Remove highlighting from every button.
-    buttons.forEach(function (button) {
-
-      button.classList.remove("active");
+      button.classList.toggle("tabActive", active);
 
       button.setAttribute(
-        "aria-selected",
-        "false"
+        "aria-current",
+        active ? "page" : "false"
       );
 
     });
 
-    // Highlight the selected button.
-    clickedButton.classList.add("active");
-
-    clickedButton.setAttribute(
-      "aria-selected",
-      "true"
-    );
-
   }
 
-  // Listen for clicks on navigation buttons.
   document.addEventListener("click", function (event) {
 
-    const button = event.target.closest("nav button");
+    const button = event.target.closest("[data-tab]");
 
     if (!button) return;
 
-    updateActiveTab(button);
+    updateActiveTab(button.dataset.tab);
 
   });
 
-  console.log(
-    "RoadLedger Navigation System Loaded"
-  );
+  console.log("RoadLedger navigation highlighting ready.");
 
 })();
