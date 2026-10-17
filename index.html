@@ -179,7 +179,7 @@ refreshExtras();
 (function(){
  const specKey='roadledger-route-specs-v1',stopKey='roadledger-route-stops-v1';
  function read(k,def){try{return JSON.parse(localStorage.getItem(k))||def}catch{return def}}
- function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{alert('Could not save locally. Export your RoadLedger backup.');return false}}
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{alert('Could not save locally. Export your RoadLedger backup.');return false}}
  let specs=read(specKey,{}),stops=read(stopKey,[]);
  const fields=['routeHeight','routeWidth','routeWeight','routeAxles'];
  function options(select,items,defaultName){const prev=select.value;select.replaceChildren();const blank=new Option('None / not selected','');select.add(blank);[...new Set(items.filter(Boolean))].forEach(v=>select.add(new Option(v,v)));select.value=items.includes(prev)?prev:(items.includes(defaultName)?defaultName:'')}
@@ -194,4 +194,16 @@ refreshExtras();
  let layer=0;const names=['Truck stops: OFF','Truck stops: ON (preview)','Truck stops + fuel prices (preview)'];$('routeFuelLayer').onclick=()=>{layer=(layer+1)%3;$('routeFuelLayer').textContent=names[layer]};
  const prior=showTab;showTab=function(name){if(name==='routeweather')updateChoices();prior(name)};updateChoices();
 })();
+async function getRoadWeather(latitude, longitude) {
+  const location = `${latitude},${longitude}`;
+  const url = "https://roadledger-weather.epic-evan7.workers.dev/?location=" + encodeURIComponent(location);
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error("Weather request failed");
+  }
+
+  return await response.json();
+}
 </script></body></html>
