@@ -330,4 +330,6 @@
     "RoadLedger Weather Dashboard initialized."
   );
 
+   // Automatically load weather when RoadLedger opens.
+startWeatherUpdates();
 })();
