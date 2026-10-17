@@ -206,11 +206,34 @@
 
   function setText(id, message) {
     const element = getElement(id);
-
-    if (element) {
+ 
+     if (element) {
       element.textContent = message;
     }
   }
+     
+  // Automatically load saved equipment into GPS.
+  function loadEquipmentIntoGps() {
+    const equipment = getSavedEquipment();
+
+    if (!equipment) return;
+
+    const fields = {
+      gpsTruckHeight: equipment.equipmentHeight,
+      gpsTruckWidth: equipment.equipmentWidth,
+      gpsTruckAxles: equipment.equipmentAxles
+    };
+
+    Object.entries(fields).forEach(function ([id, value]) {
+      const input = getElement(id);
+
+      if (input && value !== undefined && value !== null && value !== "") {
+        input.value = value;
+      }
+    });
+  }
+
+  loadEquipmentIntoGps();
 
   // GPS location detection.
   getElement("gpsDetectLocation").addEventListener(
