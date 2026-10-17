@@ -167,7 +167,55 @@ refreshExtras();
  hide.addEventListener('click',()=>{mic.classList.add('hide');hide.classList.add('hide');restore.classList.remove('hide')});
  restore.addEventListener('click',()=>{mic.classList.remove('hide');hide.classList.remove('hide');restore.classList.add('hide')});
  $('routePreview').addEventListener('click',()=>{const a=$('routeFrom').value.trim(),b=$('routeTo').value.trim();if(!a||!b){$('routePreviewText').textContent='Enter both locations.';return}const dep=$('routeDepart').value;$('routePreviewText').textContent='Illustrative route: '+a+' → '+b+(dep?' · Departure: '+dep.replace('T',' '):'')+'. Live routing and weather forecasts are not connected.'});
- $('routeLocation').addEventListener('click',()=>{const out=$('routeLocationResult');if(!navigator.geolocation){out.textContent='GPS location unavailable in this browser.';return}out.textContent='Requesting location permission…';navigator.geolocation.getCurrentPosition(p=>{out.textContent='Current GPS: '+p.coords.latitude.toFixed(5)+', '+p.coords.longitude.toFixed(5)+' (accuracy ±'+Math.round(p.coords.accuracy)+' m). Not a navigation route.'},e=>{out.textContent='Location unavailable: '+e.message},{enableHighAccuracy:true,timeout:12000,maximumAge:30000})});
+$('routeLocation').addEventListener('click', () => {
+  const out = $('routeLocationResult');
+
+  if (!navigator.geolocation) {
+    out.textContent = 'GPS location unavailable in this browser.';
+    return;
+  }
+
+  out.textContent = 'Requesting GPS location…';
+
+  navigator.geolocation.getCurrentPosition(
+    async p => {
+      const lat = p.coords.latitude;
+      const lon = p.coords.longitude;
+
+      out.textContent =
+        'Current GPS: ' +
+        lat.toFixed(5) + ', ' +
+        lon.toFixed(5) +
+        ' (accuracy ±' +
+        Math.round(p.coords.accuracy) +
+        ' m). Not a navigation route. Loading weather…';
+
+      try {
+        const weather = await getRoadWeather(lat, lon);
+
+        out.textContent =
+          'Current GPS: ' +
+          lat.toFixed(5) + ', ' +
+          lon.toFixed(5) +
+          '\nWeather data: ' +
+          JSON.stringify(weather, null, 2);
+
+      } catch (error) {
+        out.textContent =
+          'GPS acquired, but weather could not load: ' +
+          error.message;
+      }
+    },
+    e => {
+      out.textContent = 'Location unavailable: ' + e.message;
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 30000
+    }
+  );
+});
  const k='roadledger-tires-v1';let tireRecords={};try{tireRecords=JSON.parse(localStorage.getItem(k))||{}}catch{};
  function fillTires(){const select=$('tireVehicle'),old=select.value;select.innerHTML=chooseVehicle();if([...select.options].some(o=>o.value===old))select.value=old;const item=tireRecords[select.value]||{};$('tireSize').value=item.size||'';$('tireCount').value=item.count||'';$('tireStatus').textContent=select.value?'Edit tire configuration for '+select.value:'Select a truck or trailer first.'}
  $('tireVehicle').addEventListener('change',fillTires);
