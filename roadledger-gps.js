@@ -11,20 +11,28 @@
 
   let currentLocation = null;
   let plannedStops = [];
-      // Read saved equipment information from RoadLedger.
-  function getSavedEquipment() {
-    try {
-      const saved = localStorage.getItem("roadledger-v1");
-      if (!saved) return null;
+// Read saved equipment information from RoadLedger.
+function getSavedEquipment() {
+  try {
+    const saved = localStorage.getItem("roadledger-v1");
+    if (!saved) return null;
 
-      const data = JSON.parse(saved);
-      return data.equipment || null;
-    } catch (error) {
-      console.warn("Unable to load saved equipment.", error);
-      return null;
-    }
+    const data = JSON.parse(saved);
+
+    // Support both equipment storage formats.
+    const equipment = data.equipment || data;
+
+    return {
+      equipmentHeight: equipment.equipmentHeight || "",
+      equipmentWidth: equipment.equipmentWidth || "",
+      equipmentAxles: equipment.equipmentAxles || ""
+    };
+
+  } catch (error) {
+    console.warn("Unable to load saved equipment.", error);
+    return null;
   }
-
+}
   const weatherTab =
     document.getElementById("routeweatherTab");
 
