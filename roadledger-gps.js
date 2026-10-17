@@ -500,3 +500,201 @@
   );
 
 })();
+/* ==========================================
+   ROADLEDGER LIVE GPS MAP
+   Interactive Map - Version 1.0
+   ========================================== */
+
+(function () {
+  "use strict";
+
+  const planner = document.getElementById("roadledgerGpsPlanner");
+
+  if (!planner) {
+    console.warn("RoadLedger GPS planner not found.");
+    return;
+  }
+
+  // Create map container.
+  const mapSection = document.createElement("section");
+
+  mapSection.innerHTML = `
+    <h3>🗺️ Live GPS Map</h3>
+
+    <p class="muted">
+      Interactive road map with live GPS positioning.
+    </p>
+
+    <div
+      id="roadledgerLiveMap"
+      style="
+        width:100%;
+        height:420px;
+        border-radius:12px;
+        overflow:hidden;
+        background:#202b38;
+      "
+    ></div>
+
+    <button
+      type="button"
+      id="roadledgerFollowGps"
+      style="margin-top:12px;"
+    >
+      📍 Follow My Location
+    </button>
+
+    <p id="roadledgerMapStatus" class="muted">
+      Loading interactive map...
+    </p>
+  `;
+
+  planner.prepend(mapSection);
+
+  function setStatus(message) {
+    document.getElementById("roadledgerMapStatus").textContent = message;
+  }
+
+  // Load Leaflet mapping library.
+  function loadLeaflet() {
+    return new Promise(function (resolve, reject) {
+
+      if (window.L) {
+        resolve();
+        return;
+      }
+
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href =
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+
+      document.head.appendChild(css);
+
+      const script = document.createElement("script");
+      script.src =
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+
+      script.onload = resolve;
+      script.onerror = function () {
+        reject(new Error("Unable to load map library."));
+      };
+
+      document.head.appendChild(script);
+    });
+  }
+
+  let map = null;
+  let truckMarker = null;
+  let following = true;
+  let watchId = null;
+
+  async function initializeMap() {
+    try {
+      await loadLeaflet();
+
+      map = L.map("roadledgerLiveMap").setView(
+        [39.5, -98.35],
+        4
+      );
+
+      L.tileLayer(
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          maxZoom: 19,
+          attribution:
+            '&copy; OpenStreetMap contributors'
+        }
+      ).addTo(map);
+
+      setStatus(
+        "Map loaded. Tap Follow My Location to activate GPS."
+      );
+
+      // Refresh map dimensions when displayed.
+      setTimeout(function () {
+        map.invalidateSize();
+      }, 500);
+
+    } catch (error) {
+      setStatus("Map loading failed: " + error.message);
+    }
+  }
+
+  function startTracking() {
+    if (!map) {
+      setStatus("Map is still loading.");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setStatus("GPS is not supported on this device.");
+      return;
+    }
+
+    if (watchId !== null) {
+      following = true;
+      setStatus("Following your current location.");
+      return;
+    }
+
+    setStatus("Requesting GPS location...");
+
+    watchId = navigator.geolocation.watchPosition(
+      function (position) {
+
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        if (!truckMarker) {
+          truckMarker = L.marker([lat, lon])
+            .addTo(map)
+            .bindPopup("🚛 Your current location");
+        } else {
+          truckMarker.setLatLng([lat, lon]);
+        }
+
+        if (following) {
+          map.setView([lat, lon], 15);
+        }
+
+        setStatus(
+          "GPS active • Accuracy: " +
+          Math.round(position.coords.accuracy) +
+          " meters"
+        );
+      },
+
+      function (error) {
+        let message = "GPS location unavailable.";
+
+        if (error.code === 1) {
+          message = "Location permission denied.";
+        } else if (error.code === 2) {
+          message = "Unable to determine your location.";
+        } else if (error.code === 3) {
+          message = "GPS request timed out.";
+        }
+
+        setStatus(message);
+      },
+
+      {
+        enableHighAccuracy: true,
+        maximumAge: 3000,
+        timeout: 15000
+      }
+    );
+  }
+
+  document
+    .getElementById("roadledgerFollowGps")
+    .addEventListener("click", function () {
+      following = true;
+      startTracking();
+    });
+
+  initializeMap();
+
+})();
+
