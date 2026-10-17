@@ -248,11 +248,33 @@
 
       lastWeatherUpdate = Date.now();
 
-    } catch (error) {
-      setText(
-        "weatherStatus",
-        "Weather update failed: " + error.message
-      );
+  } catch (error) {
+
+  let message = "⚠️ Weather update failed. Please try again.";
+
+  if (error.code === 1) {
+    message =
+      "📍 Location access denied. Enable Location Services " +
+      "for your browser in your device settings, then tap GPS again.";
+  }
+
+  else if (error.code === 2) {
+    message =
+      "📡 GPS location unavailable. Check your signal " +
+      "and make sure Location Services are enabled.";
+  }
+
+  else if (error.code === 3) {
+    message =
+      "⏳ GPS timed out. Move somewhere with a better signal " +
+      "and tap GPS again.";
+  }
+
+  else if (error.message) {
+    message = "⚠️ " + error.message;
+  }
+
+  setText("weatherStatus", message);
 
     } finally {
       weatherLoading = false;
