@@ -122,7 +122,7 @@
   function formatNumber(value, digits = 0) {
     const number = Number(value);
 
-    if (value === null ||
+    if (value === "" || value === null ||
         value === undefined ||
         !Number.isFinite(number)) {
       return "--";
@@ -191,7 +191,7 @@
     );
   }
 
-  async function updateWeather() {
+  async function updateWeather(force = false) {
     if (weatherLoading || document.hidden) {
       return;
     }
@@ -219,13 +219,14 @@
           {
             enableHighAccuracy: true,
             timeout: 12000,
-            maximumAge: 30000
+            maximumAge: force ? 0 : 30000
           }
         );
       });
 
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
+      gpsResult.textContent = 'Current GPS: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5) + ' (accuracy ±' + Math.round(position.coords.accuracy) + ' m). Not a navigation route.';
 
       const location = encodeURIComponent(
         latitude + "," + longitude
@@ -233,7 +234,7 @@
 
       const response = await fetch(
         WEATHER_URL + "?location=" + location,
-        { cache: "no-store" }
+        { cache: "no-store", signal: AbortSignal.timeout(15000) }
       );
 
       if (!response.ok) {
@@ -274,14 +275,15 @@
     message = "⚠️ " + error.message;
   }
 
-  setText("weatherStatus", message);
+  setText("weatherStatus", message + " Previous readings, if shown, may be stale.");
+  if (error.code) gpsResult.textContent = message;
 
     } finally {
       weatherLoading = false;
     }
   }
 
-  function startWeatherUpdates() {
+  function startWeatherUpdates(force = false) {
     if (!weatherStarted) {
       weatherStarted = true;
 
@@ -292,10 +294,10 @@
 
     // Avoid unnecessary repeat requests.
     if (
-      !lastWeatherUpdate ||
+      force || !lastWeatherUpdate ||
       Date.now() - lastWeatherUpdate >= REFRESH_INTERVAL
     ) {
-      updateWeather();
+      updateWeather(force);
     }
   }
 
@@ -307,7 +309,7 @@
     function (event) {
       event.stopImmediatePropagation();
 
-      startWeatherUpdates();
+      startWeatherUpdates(true);
     },
     true
   );
