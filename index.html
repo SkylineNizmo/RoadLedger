@@ -230,7 +230,15 @@ refreshExtras();
 // RoadLedger combined update: optional floating mic, route/GPS preview, tire configuration.
 (function(){
  const mic=$('floatingMic'),hide=$('floatingMicHide'),restore=$('floatingMicRestore');
- mic.addEventListener('click',()=>{showTab('home');$('voiceCard').scrollIntoView({behavior:'smooth',block:'start'});});
+mic.addEventListener('click', () => {
+  showTab('home');
+  $('voiceCard').scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+
+  $('voiceButton').click();
+});
  hide.addEventListener('click',()=>{mic.classList.add('hide');hide.classList.add('hide');restore.classList.remove('hide')});
  restore.addEventListener('click',()=>{mic.classList.remove('hide');hide.classList.remove('hide');restore.classList.add('hide')});
  $('routePreview').addEventListener('click',()=>{const a=$('routeFrom').value.trim(),b=$('routeTo').value.trim();if(!a||!b){$('routePreviewText').textContent='Enter both locations.';return}const dep=$('routeDepart').value;$('routePreviewText').textContent='Illustrative route: '+a+' → '+b+(dep?' · Departure: '+dep.replace('T',' '):'')+'. Live routing and weather forecasts are not connected.'});
