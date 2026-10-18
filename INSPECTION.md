@@ -56,9 +56,27 @@ Application contexts monitored by the smoke and regression suites recorded no un
 
 - Cross-device accounts, cloud storage, and automatic synchronization remain absent. Records are browser-local; backups transfer them manually. Concurrent tabs should reload when a save reports a conflict. LocalStorage conflict checks are not a distributed transaction or a guarantee against simultaneous writes from separate processes.
 - The recovery journal requires extra browser storage. A restore may be safely refused when there is insufficient space. Browser storage clearing or device loss can still destroy local records; downloaded backups remain necessary.
-- Expenses entered both on a load and separately in Finance count twice because the records have no shared expense identifier. Enter each cost once; automatic reconciliation would require a data-model/workflow change.
+- Duplicate load/Finance costs are reconciled using explicit expense-to-load links (see below). Unlinked historic records require the user to identify the shared cost in Expense History; matching dates or amounts alone never suppress a cost. Each Finance record can link to one load. This does not deduplicate receipts entered twice within Finance or costs repeated across different load records.
 - Revenue totals include every saved payment status, including pending loads; they represent recorded revenue rather than cash received. Financial estimates do not provide payroll/tax accounting or reconcile bank transactions.
 - Load Board, live booking, ELD synchronization, commercial truck routing/restriction verification, turn-by-turn directions, route-time weather, live truck-stop/fuel-price layers, and AI calling/negotiation/offer approval still require integrations. Their existing placeholder panels and APIs are preserved.
 - Documents remain a metadata/checklist register without secure file upload/storage. Maintenance reminders remain in-app, without push notifications or automatic odometer feeds.
 - The separate GPS planner's temporary destination/stop inputs remain session-only; persisted route stops in the route checklist are backed up. Theme preference remains device-local.
 - Weather was tested using controlled responses and mocked device location. Live provider availability, units/field contract, actual device permissions, and mobile-browser behavior were not verified. No production website or paid integration was used for testing.
+
+
+## Duplicate-expense accounting repair
+
+- Finance now offers “Already included in a load’s business expenses?” when saving a business-paid expense. The same selector appears beside existing business-paid expenses in Expense History, so historic records can be reconciled without recreating or deleting them.
+- Linking stores only an optional `loadExpenseId` reference. Load expense totals, receipt amounts, dates, categories, gallons, payers, notes, and record IDs are preserved. Existing records remain separate until explicitly linked. Relationships can be removed or corrected.
+- A shared accounting calculation uses integer cents. Total business expense is the load totals plus Finance business expenses minus the explicitly linked overlap. Each load’s overlap is capped at its expense total; extra linked receipts or amounts beyond that total still count separately. Driver-paid/reimbursed costs cannot consume a business-load allowance.
+- Example: a load has $100 of business expenses, with $60 fuel and $40 toll receipts entered in Finance. Linking those receipts to the load leaves total expense at $100, rather than $200. A separate $100 receipt remains an additional expense even if its date or amount matches.
+- Expense History and Financial Overview explain the amount already included and the additional amount counted. The fuel/gallons breakdown retains the original receipt details. Revenue, driver-paid costs, invoices, and existing load report fields retain their established meaning.
+- Deleting a linked load or reducing its expense allowance never hides the remaining Finance receipts. Missing/zero-allowance references count the uncovered receipt amounts separately. Removing a receipt recalculates the available coverage for other linked receipts. Shared allocation follows saved receipt order; aggregate totals do not depend on that order.
+- Backup/restore preserves the references and validates their type. Finance CSV retains the original amounts and adds `loadExpenseId` when present, `includedInLoad`, and `additionalExpense` for reconciliation. Add the load expense totals to the CSV's additional amounts to reproduce the all-time expense total; do not add raw receipt amounts to load totals again.
+- Link saves use existing storage-failure rollback and stale-tab conflict protection. No financial records are automatically migrated or matched by heuristics.
+
+### Additional verification
+
+- `tests/accounting.cjs` checks full/partial/split/excess coverage, independent costs, multiple loads, business/driver/reimbursed separation, missing and zero-allowance loads, decimal cents, immutable inputs, and order-independent totals.
+- `tests/expense-links.cjs` checks new and existing links through the UI, exact Finance/remainder totals, unchanged original records, reload persistence, unlinking, CSV metadata, backup upload/download, receipt deletion, changed load totals, dangling references, failed-save rollback, stale-tab conflicts, and invalid import references.
+- The original smoke, navigation, and repair browser suites are also rerun with this change. No main-branch merge, deployment, or paid integration is part of the repair.

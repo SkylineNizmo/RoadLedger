@@ -86,6 +86,7 @@
       result.extras[bucket] ??= [];
       records(result.extras[bucket],bucket,['amount','gallons','miles','cost','odo','dueOdo']);
     }
+    for (const row of result.extras.expenses) if (row.loadExpenseId !== undefined && row.loadExpenseId !== null && typeof row.loadExpenseId !== 'string') fail('invalid expense load reference');
     for (const row of result.extras.expenses) if (!Number.isFinite(row.amount) || row.amount <= 0) fail('invalid expense amount');
     for (const row of result.extras.fleet) if (typeof row.name !== 'string' || !row.name.trim() || !['truck','trailer'].includes(String(row.type).toLowerCase())) fail('invalid fleet equipment');
     for (const row of result.extras.ifta) if (!/^[A-Z]{2}$/.test(row.state) || !Number.isFinite(row.miles)) fail('invalid jurisdiction record');
