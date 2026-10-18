@@ -80,3 +80,10 @@ Application contexts monitored by the smoke and regression suites recorded no un
 - `tests/accounting.cjs` checks full/partial/split/excess coverage, independent costs, multiple loads, business/driver/reimbursed separation, missing and zero-allowance loads, decimal cents, immutable inputs, and order-independent totals.
 - `tests/expense-links.cjs` checks new and existing links through the UI, exact Finance/remainder totals, unchanged original records, reload persistence, unlinking, CSV metadata, backup upload/download, receipt deletion, changed load totals, dangling references, failed-save rollback, stale-tab conflicts, and invalid import references.
 - The original smoke, navigation, and repair browser suites are also rerun with this change. No main-branch merge, deployment, or paid integration is part of the repair.
+
+
+## Offline synchronization development preparation
+
+A separate `roadledger-offline-sync` branch adds copy-only IndexedDB migration, durable pending edits, record-level revisions/tombstones, explicit conflict review and recovery archives, recoverable projection, a versioned offline app shell, and an isolated authenticated mock service. Default configuration uploads no records. Existing record formats and financial repairs are retained.
+
+Cloud backend evaluation, costs, tested behavior, production authentication/storage setup, and explicit limits are documented in `docs/OFFLINE-SYNC.md`. Real provider credentials, PostgreSQL/RLS verification, a production session host, native Safari/device testing, and deployment remain outstanding. No cloud account or live site change is part of that preparation.

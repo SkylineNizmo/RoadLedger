@@ -38,6 +38,7 @@
     const raw=JSON.stringify(value);
     localStorage.setItem(key,raw);
     observed.set(key,raw);
+    window.dispatchEvent(new CustomEvent('roadledger:saved'));
     return true;
   }
   function validate(backup) {
@@ -123,7 +124,21 @@
       throw new Error('Restore failed; original records were preserved. ' + error.message);
     }
     keys.forEach(key=>observed.set(key,localStorage.getItem(key)));
+    window.dispatchEvent(new CustomEvent('roadledger:saved'));
     return b;
   }
-  window.RoadLedgerStorage = {validate,restore,validDate,write,read};
+  function snapshot(){
+    if(recoveryBlocked||localStorage.getItem(journalKey))throw Error('Finish restore recovery before synchronizing.');
+    return Object.fromEntries(keys.map(key=>[key,localStorage.getItem(key)]));
+  }
+  function applySync(raw,expected){
+    const previous=snapshot();
+    if(keys.some(key=>previous[key]!==expected[key]))throw Error('Local records changed. Synchronize again before applying cloud records.');
+    const parsed=keys.map(key=>raw[key]===null?null:JSON.parse(raw[key]));
+    validate({version:4,roadledger:parsed[0]??{loads:[]},settings:parsed[1]??{},mileageTrips:parsed[2]??[],extras:parsed[3]??{},tires:parsed[4]??{},routeSpecs:parsed[5]??{},routeStops:parsed[6]??[]});
+    localStorage.setItem(journalKey,JSON.stringify(previous));
+    try{keys.forEach(key=>raw[key]===null?localStorage.removeItem(key):localStorage.setItem(key,raw[key]));localStorage.removeItem(journalKey)}catch(error){try{recover()}catch{recoveryBlocked=true}throw error}
+    keys.forEach(key=>observed.set(key,localStorage.getItem(key)));
+  }
+  window.RoadLedgerStorage = {validate,restore,validDate,write,read,snapshot,applySync};
 })();

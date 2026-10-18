@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict');const {mockFixture}=require('./mock-fixture.cjs');
+(async()=>{const mock=await mockFixture();try{let cookie,csrf;
+async function login(){const r=await fetch(mock.url+'api/sync/session',{method:'POST',headers:{'Content-Type':'application/json','X-RoadLedger-Client':'1'},body:JSON.stringify({email:'driver@example.test',password:'local-demo-only'})});assert.equal(r.status,200);cookie=r.headers.get('set-cookie').split(';')[0];csrf=(await r.json()).csrf;assert.match(r.headers.get('set-cookie'),/HttpOnly/);assert.match(r.headers.get('set-cookie'),/SameSite=Strict/)}
+const push=op=>fetch(mock.url+'api/sync/push',{method:'POST',headers:{cookie,'X-CSRF-Token':csrf,'X-RoadLedger-Client':'1','Content-Type':'application/json'},body:JSON.stringify(op)});
+await login();const operation={key:'["loads","durable"]',value:{id:'durable',pay:100},baseVersion:0,opId:'durable-op'};const first=await(await push(operation)).json();const second=await(await push(operation)).json();assert.deepEqual(second,first);assert.equal(first.record.version,1);assert.equal((await push({...operation,value:{id:'durable',pay:999}})).status,409);
+const conflict=await(await push({...operation,opId:'stale-op'})).json();assert.equal(conflict.conflict,true);
+assert.equal((await push({...operation,key:'__proto__',opId:'bad-key'})).status,400);
+const cross=await fetch(mock.url+'api/sync/pull?cursor=0',{headers:{cookie,Origin:'https://attacker.example'}});assert.equal(cross.status,403);
+await mock.restart();const expired=await fetch(mock.url+'api/sync/pull?cursor=0',{headers:{cookie}});assert.equal(expired.status,401);await login();const feed=await(await fetch(mock.url+'api/sync/pull?cursor=0',{headers:{cookie}})).json();assert.equal(feed.changes.length,1);assert.equal(feed.changes[0].value.pay,100);const replay=await(await push(operation)).json();assert.deepEqual(replay,first);
+const deleted=await(await push({key:operation.key,value:null,baseVersion:1,opId:'delete-op'})).json();assert.equal(deleted.record.value,null);assert.equal(deleted.record.version,2);
+console.log('PASS: authenticated mock API, HttpOnly/SameSite cookies, durable restart, lost-ack idempotency, operation-ID misuse rejection, stale revision conflicts, invalid keys/origins, expired sessions, and deletion tombstones.');
+}finally{await mock.close()}})().catch(e=>{console.error(e);process.exitCode=1});
