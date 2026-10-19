@@ -54,3 +54,23 @@ NODE_PATH=/workspace/.roadledger-tools/node_modules node tests/offline.cjs
 - `offline.cjs`: actual service-worker offline reload, queue persistence, automatic reconnect/session resume/upload, no API caching, credential-free recovery export, and all tabs at phone/tablet/desktop viewports. Chromium viewport emulation does not verify native iPhone/iPad Safari or physical devices.
 
 Run the original suites against a local server as above to check application/financial regressions. See `docs/OFFLINE-SYNC.md` for architecture, backend costs, mock operation, and the setup/security work still required for a real deployment.
+
+
+## Supabase hardening tests (local only)
+
+The root `package.json` pins development-only PGlite and Playwright dependencies. No runtime dependency or build step was added to the static application. With dependencies installed and Chromium available:
+
+```sh
+npm run test:security
+```
+
+This runs `protocol.cjs`, `database.cjs`, `provider.cjs`, `sessions.cjs`, `mock-api.cjs`, and `pagination.cjs`. The database test uses the actual SQL file in an isolated in-memory PostgreSQL engine with local Auth stubs and fixtures. It never reads a database URL/credential or contacts Supabase. Authentication tests use a fictional provider and temporary encrypted session files. See `docs/SUPABASE-HARDENING.md` for scope and remaining managed-service verification.
+
+## Render hosting preparation (local only)
+
+`npm run test:render` runs the production asset/proxy/host/PORT/health/disabled-cloud tests, production-launcher encrypted-session restart/logout tests with a fake provider, and Chromium desktop/phone/tablet touch emulation through a loopback ingress. It checks actual load storage, IndexedDB offline queue persistence, offline service-worker reload, API cache exclusion, and all 12 tabs. Chromium and the pinned development dependencies must be available. These tests do not deploy or contact Supabase; viewport emulation does not certify native Safari or physical Android/Apple devices. Configuration and remaining staging/device checks: `docs/RENDER.md`.
+
+
+## Authentication audit regressions (no SQL)
+
+`npm run test:auth` runs `auth-recovery.cjs`, `proxy-identity.cjs`, and `sessions.cjs` using fictional providers and temporary encrypted session files. It verifies durable rotation before identity verification, transient-outage/restart/concurrent recovery, write failure and identity mismatch rejection, verified right-to-left proxy traversal, independent drivers, spoof resistance and account/client throttling. It does not run a migration or contact Supabase. `npm run test:security` **does execute SQL locally** through `database.cjs`; omit that command when SQL execution has not been authorized.

@@ -1,6 +1,7 @@
 /* Offline queue and record-level optimistic synchronization; no provider credentials. */
 (function(root){
 'use strict';
+const protocol=typeof module!=='undefined'&&module.exports?require('./protocol.js'):root.RoadLedgerProtocol;
 const KEYS=['roadledger-v1','roadledger-settings-v2','roadledger-mileage-v1','roadledger-extras-v1','roadledger-tires-v1','roadledger-route-specs-v1','roadledger-route-stops-v1'];
 const clone=v=>structuredClone(v);
 const stable=v=>v===undefined?'undefined':JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
@@ -12,7 +13,7 @@ function flatten(raw){
  const read=(i,fallback)=>raw[KEYS[i]]===null||raw[KEYS[i]]===undefined?clone(fallback):JSON.parse(raw[KEYS[i]]);
  const result={};
  const add=(collection,id,value)=>{const key=JSON.stringify([collection,String(id)]);if(Object.hasOwn(result,key))throw Error('Duplicate IDs in '+collection+'. Export a backup before repairing these records.');result[key]=clone(value)};
- const rows=(collection,list)=>{if(!Array.isArray(list))throw Error('Invalid local '+collection);list.forEach((row,index)=>{if(!object(row))throw Error('Invalid record in '+collection);add(collection,row.id??'legacy-'+index,row)})};
+ const rows=(collection,list)=>{if(!Array.isArray(list))throw Error('Invalid local '+collection);list.forEach((row,index)=>{if(!object(row))throw Error('Invalid record in '+collection);add(collection,row.id??'legacy-'+index,{...row,id:row.id??'legacy-'+index})})};
  const main=read(0,{loads:[]});if(!object(main))throw Error('Invalid local load data');rows('loads',main.loads??[]);const equipment={...main};delete equipment.loads;if(Object.keys(equipment).length)add('equipment','default',equipment);
  const settings=read(1,{});if(!object(settings))throw Error('Invalid settings');if(Object.keys(settings).length)add('settings','default',settings);
  rows('mileage',read(2,[]));const extras=read(3,{});if(!object(extras))throw Error('Invalid extra records');
@@ -68,8 +69,8 @@ class Engine{
   if(epoch!==this.epoch)return;const initial=await this.store.state();if(initial.owner!==user)throw Error('Workspace account mismatch');
   for(const [key,record]of Object.entries(initial.records)){
    if(epoch!==this.epoch)return;if(!record.dirty||initial.conflicts[key])continue;
-   const reply=await this.transport.push({key,value:record.value,baseVersion:record.baseVersion,opId:record.opId});if(epoch!==this.epoch)return;
-   if(!reply||!Number.isSafeInteger(reply.record?.version)||reply.record.version<0||!Object.hasOwn(reply.record,'value'))throw Error('Invalid server revision');
+   const operation={key,value:record.value,baseVersion:record.baseVersion,opId:record.opId};try{protocol.validateOperation(operation)}catch(error){error.message=key+': '+error.message;throw error}const reply=await this.transport.push(operation);if(epoch!==this.epoch)return;
+   if(!reply||!Number.isSafeInteger(reply.record?.version)||reply.record.version<0||!Object.hasOwn(reply.record,'value'))throw Error('Invalid server revision');protocol.validateRecord(key,reply.record.value);
    await this.store.edit(state=>{const current=state.records[key];if(!current)return;
     if(reply.conflict){state.conflicts[key]={local:clone(current.value),remote:clone(reply.record.value),remoteVersion:reply.record.version,baseVersion:current.baseVersion};return}
     if(!same(reply.record.value,record.value))throw Error('Server acknowledgement does not match queued value');
@@ -77,7 +78,7 @@ class Engine{
    });
   }
   const cursor=(await this.store.state()).cursor;const response=await this.transport.pull(cursor);if(epoch!==this.epoch)return;
-  if(!response||!Array.isArray(response.changes)||!Number.isSafeInteger(response.cursor)||response.cursor<cursor)throw Error('Invalid change feed');
+  protocol.validatePage(response,cursor);
   await this.store.edit(state=>{for(const change of response.changes){if(!validKey(change.key)||!Number.isSafeInteger(change.version)||change.version<1||!Object.hasOwn(change,'value'))throw Error('Invalid remote record');const old=state.records[change.key];
     if(old&&change.version<=old.version)continue;if(state.conflicts[change.key]?.remoteVersion>=change.version)continue;
     if(old?.dirty){if(same(old.value,change.value)){old.dirty=false;old.version=change.version;old.baseVersion=change.version;if(same(state.projection[change.key]??null,change.value))state.projectionVersions[change.key]=change.version;delete state.conflicts[change.key]}else state.conflicts[change.key]={local:clone(old.value),remote:clone(change.value),remoteVersion:change.version,baseVersion:old.baseVersion}}
@@ -91,7 +92,7 @@ class Engine{
   await this.store.edit(state=>{if(state.pendingApply?.id!==plan.id)throw Error('Another tab is applying records');state.projection=flatten(plan.raw);state.projectionRaw=clone(plan.raw);state.projectionVersions=plan.versions;delete state.pendingApply});
  }
  start(){this.stop();this.stopped=false;this.wake=()=>this.schedule(0);root.addEventListener?.('online',this.wake);this.visibility=()=>{if(!root.document?.hidden)this.schedule(0)};root.document?.addEventListener('visibilitychange',this.visibility);this.schedule(0)}
- schedule(delay){if(this.stopped)return;clearTimeout(this.timer);this.timer=setTimeout(async()=>{try{if(root.navigator?.onLine===false)throw Error('Offline');if(!this.session&&!(await this.resume()))return;if(this.stopped)return;await this.sync();this.retry=1000;this.schedule(15000)}catch(error){if(error.status===401||error.status===403){this.session=null;this.status='Session expired; sign in again. Local work is retained.';this.notify();return}this.status='Offline or service unavailable; changes remain queued';this.notify();this.schedule(this.retry+Math.floor(Math.random()*250));this.retry=Math.min(this.retry*2,60000)}},delay)}
+ schedule(delay){if(this.stopped)return;clearTimeout(this.timer);this.timer=setTimeout(async()=>{try{if(root.navigator?.onLine===false)throw Error('Offline');if(!this.session&&!(await this.resume()))return;if(this.stopped)return;await this.sync();this.retry=1000;this.schedule((await this.store.state()).moreCloud?0:15000)}catch(error){if(error.status===401||error.status===403){this.session=null;this.status='Session expired; sign in again. Local work is retained.';this.notify();return}if(error.permanent||[400,409,413,422].includes(error.status)){this.status='Synchronization paused: '+error.message+'. Saved records remain on this device; export recovery before correcting the record.';this.notify();return}this.status=error.status===429?'Sync quota reached; saved changes remain queued':'Offline or service unavailable; changes remain queued';this.notify();this.schedule(this.retry+Math.floor(Math.random()*250));this.retry=Math.min(this.retry*2,60000)}},delay)}
  stop(){this.stopped=true;clearTimeout(this.timer);if(this.wake)root.removeEventListener?.('online',this.wake);if(this.visibility)root.document?.removeEventListener('visibilitychange',this.visibility)}
 }
 const api={KEYS,validKey,flatten,materialize,Store,Engine,same};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RoadLedgerSync=api;

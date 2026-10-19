@@ -1,5 +1,6 @@
 /* Loopback-only development server. Fictional users; never deploy this server. */
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const protocol=require('../sync/protocol.js');
 const ROOT=path.resolve(__dirname,'..');
 const args=process.argv.slice(2);const arg=(name,fallback)=>args.includes(name)?args[args.indexOf(name)+1]:fallback;
 const port=Number(arg('--port','8000')),dataFile=arg('--data',null);
@@ -14,14 +15,14 @@ function start(){const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://'+req.headers.host);
  if(!url.pathname.startsWith('/api/sync/')){
   const pathname=url.pathname==='/'?'/index.html':url.pathname;
-  const allowed=/^\/(index\.html|roadledger-[\w-]+\.js|sync\/[\w-]+\.js|sw\.js|manifest\.webmanifest|icon\.svg)$/.test(pathname);
+  const allowed=/^\/(index\.html|roadledger-[\w-]+\.js|sync\/[\w-]+\.js|sw\.js|manifest\.webmanifest|icon\.svg|icon-(192|512)\.png|apple-touch-icon\.png)$/.test(pathname);
   if(!allowed||req.method!=='GET')return send(404,{error:'Not found'});
-  try{const types={'.html':'text/html','.js':'text/javascript','.webmanifest':'application/manifest+json','.svg':'image/svg+xml'};res.writeHead(200,{'Content-Type':types[path.extname(pathname)]||'application/octet-stream','Cache-Control':'no-cache'});return res.end(fs.readFileSync(path.join(ROOT,pathname)))}catch{return send(404,{error:'Not found'})}
+  try{const types={'.html':'text/html','.js':'text/javascript','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png'};res.writeHead(200,{'Content-Type':types[path.extname(pathname)]||'application/octet-stream','Cache-Control':'no-cache'});return res.end(fs.readFileSync(path.join(ROOT,pathname)))}catch{return send(404,{error:'Not found'})}
  }
  try{
   if(req.headers.origin&&req.headers.origin!=='http://'+req.headers.host)return send(403,{error:'Origin rejected'});
   if(req.method!=='GET'&&req.headers['x-roadledger-client']!=='1')return send(403,{error:'Client header required'});
-  let body={};if(['POST','PUT'].includes(req.method)){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>1024*1024)return send(413,{error:'Request too large'})}body=raw?JSON.parse(raw):{}}
+  let body={};if(['POST','PUT'].includes(req.method)){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>protocol.LIMITS.requestBytes)return send(413,{error:'Request too large'})}body=raw?JSON.parse(raw):{}}
   const route=url.pathname.slice('/api/sync/'.length);
   if(route==='session'&&req.method==='POST'){
    if(!Object.hasOwn(users,body.email)||body.password!==password)return send(401,{error:'Invalid fictional demo credentials'});
@@ -34,8 +35,9 @@ function start(){const server=http.createServer(async(req,res)=>{
   if(route==='session'&&req.method==='GET')return send(200,{userId:session.userId,csrf:session.csrf,mock:true});
   if(route==='session'&&req.method==='DELETE'){sessions.delete(sid);res.setHeader('Set-Cookie','roadledger_demo=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/api/sync/');return send(200,{ok:true})}
   const state=cloud.users[session.userId]||{records:{},operations:{},changes:[],cursor:0};
-  if(route==='pull'&&req.method==='GET'){const cursor=Number(url.searchParams.get('cursor'));if(!Number.isSafeInteger(cursor)||cursor<0||cursor>state.cursor)return send(409,{error:'Invalid cursor or cloud reset; recovery required'});return send(200,{changes:state.changes.filter(c=>c.cursor>cursor),cursor:state.cursor})}
+  if(route==='pull'&&req.method==='GET'){const cursor=Number(url.searchParams.get('cursor'));if(!Number.isSafeInteger(cursor)||cursor<0||cursor>state.cursor)return send(409,{error:'Invalid cursor or cloud reset; recovery required'});return send(200,protocol.page(state.changes,cursor,state.cursor))}
   if(route==='push'&&req.method==='POST'){
+   try{protocol.validateOperation(body)}catch(error){return send(error.status||422,{error:error.message})}
    if(!validateKey(body.key)||!Object.hasOwn(body,'value')||!Number.isSafeInteger(body.baseVersion)||body.baseVersion<0||typeof body.opId!=='string'||!body.opId||body.opId.length>100)return send(400,{error:'Invalid operation'});
    const fingerprint=JSON.stringify([body.key,body.value,body.baseVersion]);const prior=state.operations[body.opId];if(prior){if(prior.fingerprint!==fingerprint)return send(409,{error:'Operation ID reused with different data'});return send(200,prior.reply)}
    const existing=state.records[body.key]||{version:0,value:null};if(existing.version!==body.baseVersion)return send(200,{conflict:true,record:existing});

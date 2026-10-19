@@ -87,3 +87,12 @@ Application contexts monitored by the smoke and regression suites recorded no un
 A separate `roadledger-offline-sync` branch adds copy-only IndexedDB migration, durable pending edits, record-level revisions/tombstones, explicit conflict review and recovery archives, recoverable projection, a versioned offline app shell, and an isolated authenticated mock service. Default configuration uploads no records. Existing record formats and financial repairs are retained.
 
 Cloud backend evaluation, costs, tested behavior, production authentication/storage setup, and explicit limits are documented in `docs/OFFLINE-SYNC.md`. Real provider credentials, PostgreSQL/RLS verification, a production session host, native Safari/device testing, and deployment remain outstanding. No cloud account or live site change is part of that preparation.
+
+
+## Local Supabase security and synchronization repairs
+
+The development project now includes stricter database/wire validation, hardened privileged functions, bounded/count-limited pagination and response readers, corrected local-scope/204 logout handling, and a production BFF with encrypted server-side sessions. Original financial records and legacy localStorage remain intact. The revised SQL has been tested only in isolated local PostgreSQL, not live Supabase. Details and remaining setup are in `docs/SUPABASE-HARDENING.md`. Changes are local only; no push, merge, deployment, or live SQL execution was performed.
+
+## Local Render hosting preparation
+
+Prepared `backend/production-server.cjs` for platform PORT/0.0.0.0, an explicit Render TLS-proxy trust boundary, canonical-host validation, allowlisted frontend hosting, security/cache headers, and `/healthz`. Cloud API access is separately disabled by default without constructing a Supabase provider; `sync/config.js` remains disabled. Added PNG PWA/Apple icons, shell cache v3, Node runtime/start settings, and hosting/session/device regression tests. No UI redesign or record migration was performed. See `docs/RENDER.md` for configuration and the remaining real Render/Supabase/native-device checks, origin migration backups, and forced-stop stale-lease recovery limitation. All work remains local; no deployment or live SQL was performed.

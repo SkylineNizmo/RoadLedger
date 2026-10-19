@@ -1,0 +1,19 @@
+{
+  "name": "roadledger-local-development",
+  "private": true,
+  "scripts": {
+    "test:security": "node tests/protocol.cjs && node tests/database.cjs && node tests/provider.cjs && node tests/sessions.cjs && node tests/mock-api.cjs && node tests/pagination.cjs",
+    "mock": "node backend/mock-server.cjs",
+    "start:api": "node backend/production-server.cjs",
+    "start": "node backend/production-server.cjs",
+    "test:render": "node tests/render.cjs && node tests/render-sessions.cjs && node tests/render-browser.cjs",
+    "test:auth": "node tests/auth-recovery.cjs && node tests/proxy-identity.cjs && node tests/sessions.cjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "playwright-core": "1.58.2"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  }
+}

@@ -1,0 +1,38 @@
+/* Isolated in-memory PostgreSQL (PGlite). Never reads database credentials or URLs. */
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const {PGlite}=require('@electric-sql/pglite');const protocol=require('../sync/protocol.js');
+(async()=>{const db=new PGlite();try{
+await db.exec('create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email_confirmed_at timestamptz,phone_confirmed_at timestamptz);');
+// auth.uid needs an explicit UUID cast, like Supabase's verified-claim interface.
+await db.exec(`create or replace function auth.uid() returns uuid language sql stable as $$ select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid $$;
+create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb) $$;
+grant usage on schema auth,public to anon,authenticated;grant execute on function auth.uid(),auth.jwt() to anon,authenticated;
+insert into auth.users values('00000000-0000-4000-8000-000000000001',now(),null),('00000000-0000-4000-8000-000000000002',now(),null),('00000000-0000-4000-8000-000000000003',null,null);`);
+const sql=fs.readFileSync(path.resolve(__dirname,'../backend/supabase.sql'),'utf8');await db.exec(sql);
+const alice='00000000-0000-4000-8000-000000000001',bob='00000000-0000-4000-8000-000000000002';
+async function as(user,query,params=[],{role='authenticated',anonymous=false}={}){await db.exec(`set role ${role}`);await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(user?{sub:user,is_anonymous:anonymous}:{})]);try{return await db.query(query,params)}finally{await db.exec('reset role')}}
+const push=(user,key,value,base,operation)=>as(user,'select public.roadledger_push($1,$2::jsonb,$3,$4) as reply',[key,JSON.stringify({data:value}),base,operation]).then(r=>r.rows[0].reply);
+const pull=(user,since)=>as(user,'select public.roadledger_pull($1) as page',[since]).then(r=>r.rows[0].page);
+const key='["loads","shared"]';let first=await push(alice,key,{id:'shared',pay:100},0,'one');assert.equal(first.record.version,1);assert.deepEqual(await push(alice,key,{id:'shared',pay:100},0,'one'),first);await assert.rejects(push(alice,key,{id:'shared',pay:200},0,'one'),/Operation ID reused/);
+const stale=await push(alice,key,{id:'shared',pay:200},0,'stale');assert.equal(stale.conflict,true);assert.equal(stale.record.value.pay,100);
+await push(bob,key,{id:'shared',pay:900},0,'one');assert.equal((await pull(alice,0)).changes[0].value.pay,100);assert.equal((await pull(bob,0)).changes[0].value.pay,900);
+for(const table of ['heads','records','changes','operations']){const rows=(await as(alice,'select owner_id from public.roadledger_sync_'+table)).rows;assert.ok(rows.every(row=>row.owner_id===alice));assert.ok(rows.length);await assert.rejects(as(null,'select * from public.roadledger_sync_'+table,[],{role:'anon'}),/permission denied/)}
+await assert.rejects(as(alice,"update public.roadledger_sync_records set value='null'::jsonb"),/permission denied/);await assert.rejects(as(alice,"delete from public.roadledger_sync_records"),/permission denied/);await assert.rejects(as(alice,"insert into public.roadledger_sync_heads(owner_id) values('00000000-0000-4000-8000-000000000002')"),/permission denied/);
+await assert.rejects(as(null,'select public.roadledger_pull(0)',[],{role:'anon'}),/permission denied/);await assert.rejects(as(null,'select public.roadledger_pull(0)'),/permanent authenticated/g);await assert.rejects(as(alice,'select public.roadledger_pull(0)',[],{anonymous:true}),/permanent authenticated/g);
+await assert.rejects(as('00000000-0000-4000-8000-000000000003','select public.roadledger_pull(0)'),/permanent authenticated/);
+const invalid=[['["loads","wrong"]',{id:'other',pay:10}],['["settings","wrong"]',{rate:25}],['["loads","bad"]',{id:'bad',pay:-1}],['["loads","bad"]',{id:'bad',date:'2026-02-30'}],['["expenses","bad"]',{id:'bad',amount:10,payer:'unknown'}],['["routeStops","default"]',['']],['["routeSpecs","x"]',{routeAxles:1.5}],['["tires","x"]',{size:'R22',count:0}],['["mileage","m"]',{id:'m',date:'2026-10-19',start:20,end:10}],['["loads","bad"]',{id:'bad',notes:'x'.repeat(65536)}],['["loads","bad"]','not an object']];
+for(const [k,v]of invalid){assert.throws(()=>protocol.validateRecord(k,v));await assert.rejects(push(alice,k,v,0,'invalid-'+invalid.indexOf(invalid.find(row=>row[0]===k&&row[1]===v))),/Invalid record/)}
+const valid=[['["routeStops","default"]',['A','B']],['["routeSpecs","x"]',{routeHeight:'13.5',routeAxles:5}],['["tires","x"]',{size:'R22',count:6}],['["expenses","e"]',{id:'e',amount:'20',payer:'business',loadExpenseId:'deleted-load'}],['["mileage","m"]',{id:'m',date:'2026-10-19',start:10,end:20,loaded:null}],['["settings","default"]',{rate:25,fuelLow:6,fuelHigh:9}]];
+for(const [index,[k,v]]of valid.entries()){protocol.validateRecord(k,v);await push(alice,k,v,0,'valid-'+index)}
+const deletion=await push(alice,key,null,1,'delete');assert.equal(deletion.record.version,2);assert.equal(deletion.record.value,null);assert.deepEqual(await push(alice,key,null,1,'delete'),deletion);assert.equal((await push(alice,key,{id:'shared',pay:150},1,'edit-deleted')).conflict,true);
+// Run the additive migration again: no records, tombstones, receipts, or history disappear.
+const before=(await db.query('select count(*)::int as n from public.roadledger_sync_changes')).rows[0].n;await db.exec(sql);assert.equal((await db.query('select count(*)::int as n from public.roadledger_sync_changes')).rows[0].n,before);assert.deepEqual(await push(alice,key,null,1,'delete'),deletion);
+const config=await db.query("select proconfig from pg_proc where pronamespace='public'::regnamespace and proname in ('roadledger_push','roadledger_pull')");assert.ok(config.rows.every(row=>row.proconfig.includes('search_path=""')));
+await assert.rejects(as(alice,"select roadledger_private.valid_record('[\"loads\",\"x\"]','null'::jsonb)"),/permission denied/);
+// Create a realistic multi-page retained history locally as a database administrator.
+await db.query(`insert into public.roadledger_sync_changes(owner_id,cursor,record_key,version,value)
+select $1::uuid,1+g,'["loads","large-'||g||'"]',1,jsonb_build_object('id','large-'||g,'notes',repeat('x',60000)) from generate_series(1,18) g`,[bob]);await db.query('update public.roadledger_sync_heads set cursor=19 where owner_id=$1',[bob]);
+let cursor=0,pages=0,seen=0;do{const page=await pull(bob,cursor);assert.ok(protocol.bytes(page)<=protocol.LIMITS.pageBytes);protocol.validatePage(page,cursor);assert.ok(page.cursor>cursor);cursor=page.cursor;seen+=page.changes.length;pages++;if(!page.hasMore)break}while(pages<10);assert.ok(pages>=3);assert.equal(cursor,19);assert.equal(seen,19);
+await db.query('update public.roadledger_sync_heads set rate_started=clock_timestamp(),rate_count=120 where owner_id=$1',[alice]);await assert.rejects(push(alice,'["loads","rate"]',{id:'rate'},0,'rate'),e=>e.code==='PT429');assert.deepEqual(await push(alice,key,null,1,'delete'),deletion);
+await db.query('update public.roadledger_sync_heads set rate_count=0,quota_bytes=104857600 where owner_id=$1',[alice]);await assert.rejects(push(alice,'["loads","quota"]',{id:'quota'},0,'quota'),e=>e.code==='PT429');
+console.log('PASS: actual local PostgreSQL SQL/RLS, authenticated/anonymous access, per-user isolation, denied direct writes, replay/misuse, stale conflicts, tombstones, schema/ID validation, private helpers, repeat migration preservation, byte-bounded pages, and rate/storage quotas. Supabase/JWT gateway not contacted.');
+}finally{await db.close()}})().catch(e=>{console.error(e);process.exitCode=1});

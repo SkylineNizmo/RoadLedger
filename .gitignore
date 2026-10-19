@@ -1,0 +1,9 @@
+/node_modules/
+/server-state/
+.env
+.env.*
+*.session
+*.session.*.tmp
+.single-process
+*.pem
+*.key

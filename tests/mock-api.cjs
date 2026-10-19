@@ -4,7 +4,7 @@ async function login(){const r=await fetch(mock.url+'api/sync/session',{method:'
 const push=op=>fetch(mock.url+'api/sync/push',{method:'POST',headers:{cookie,'X-CSRF-Token':csrf,'X-RoadLedger-Client':'1','Content-Type':'application/json'},body:JSON.stringify(op)});
 await login();const operation={key:'["loads","durable"]',value:{id:'durable',pay:100},baseVersion:0,opId:'durable-op'};const first=await(await push(operation)).json();const second=await(await push(operation)).json();assert.deepEqual(second,first);assert.equal(first.record.version,1);assert.equal((await push({...operation,value:{id:'durable',pay:999}})).status,409);
 const conflict=await(await push({...operation,opId:'stale-op'})).json();assert.equal(conflict.conflict,true);
-assert.equal((await push({...operation,key:'__proto__',opId:'bad-key'})).status,400);
+assert.equal((await push({...operation,key:'__proto__',opId:'bad-key'})).status,422);
 const cross=await fetch(mock.url+'api/sync/pull?cursor=0',{headers:{cookie,Origin:'https://attacker.example'}});assert.equal(cross.status,403);
 await mock.restart();const expired=await fetch(mock.url+'api/sync/pull?cursor=0',{headers:{cookie}});assert.equal(expired.status,401);await login();const feed=await(await fetch(mock.url+'api/sync/pull?cursor=0',{headers:{cookie}})).json();assert.equal(feed.changes.length,1);assert.equal(feed.changes[0].value.pay,100);const replay=await(await push(operation)).json();assert.deepEqual(replay,first);
 const deleted=await(await push({key:operation.key,value:null,baseVersion:1,opId:'delete-op'})).json();assert.equal(deleted.record.value,null);assert.equal(deleted.record.version,2);
