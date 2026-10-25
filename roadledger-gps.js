@@ -14,10 +14,10 @@
 // Read saved equipment information from RoadLedger.
 function getSavedEquipment() {
   try {
-    const saved = localStorage.getItem("roadledger-v1");
+    const saved = RoadLedgerStorage.read("roadledger-v1");
     if (!saved) return null;
 
-    const data = JSON.parse(saved);
+    const data = saved;
 
     // Support both equipment storage formats.
     const equipment = data.equipment || data;
@@ -393,6 +393,7 @@ function getSavedEquipment() {
     "click",
     function () {
 
+      getElement("gpsRouteSummary").replaceChildren();
       const destination =
         getElement("gpsDestination").value.trim();
 
@@ -450,12 +451,12 @@ function getSavedEquipment() {
 
       if (
         truck.axles !== "" &&
-        !Number.isInteger(Number(truck.axles))
+        (!Number.isInteger(Number(truck.axles)) || Number(truck.axles) > 30)
       ) {
 
         setText(
           "gpsRouteStatus",
-          "⚠️ Axle count must be a whole number."
+          "⚠️ Axle count must be a whole number from 1 to 30."
         );
 
         return;
