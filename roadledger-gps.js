@@ -162,6 +162,7 @@ gpsPanel.innerHTML=`
     </p>
   `;
 tab.append(gpsPanel);
+RoadLedgerNavigationDemo.mount(gpsPanel);
 const mapSection=document.createElement('section');mapSection.innerHTML=`<h3>🗺️ Live GPS Map</h3><p class="notice"><strong>Any orange dashed route is SIMULATED — NOT SAFE FOR REAL NAVIGATION.</strong> The blue/gray marker is your last GPS fix; the sample route is unrelated to it. Basemap tiles require internet; blank offline tiles do not affect saved records.</p><div id="roadledgerLiveMap" style="width:100%;height:420px;border-radius:12px;overflow:hidden;background:#202b38" role="region" aria-label="Interactive GPS map"></div><div class="actions"><button type="button" id="roadledgerFollowGps">📍 Follow My Location</button><button type="button" id="gpsShowSampleRoute" class="secondary">View sample route area</button></div><p id="roadledgerMapStatus" role="status" class="muted">Loading interactive map…</p>`;gpsPanel.prepend(mapSection);
 for(const id of ['gpsLocationStatus','gpsRouteStatus','gpsEquipmentStatus']){$(id).setAttribute('role','status');$(id).setAttribute('aria-live','polite')}
 const fieldIds={height:'gpsTruckHeight',width:'gpsTruckWidth',weight:'gpsTruckWeight',length:'gpsTruckLength',axles:'gpsTruckAxles'};

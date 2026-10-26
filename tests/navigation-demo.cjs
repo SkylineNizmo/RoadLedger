@@ -1,0 +1,8 @@
+'use strict';
+const assert=require('node:assert/strict'),{createDemo}=require('../roadledger-navigation-demo.js');
+let spoken=[],cancels=0,pending=[],removed=[];
+const d=createDemo({speech:{speak:u=>spoken.push(u),cancel:()=>cancels++},makeUtterance:text=>({text}),schedule:fn=>{pending.push(fn);return pending.length},unschedule:id=>removed.push(id)});
+d.start();assert.equal(d.snapshot().muted,true);assert.equal(spoken.length,0);assert.equal(d.snapshot().step.remaining,1200);d.mute(false);assert.match(spoken[0].text,/Demo only.*Not safe/);d.mute(true);assert.equal(cancels,1);d.next();assert.equal(spoken.length,1);d.mute(false);d.offRoute();assert.equal(d.snapshot().state,'rerouting-demo');d.offRoute();assert.equal(pending.length,1);assert.equal(d.snapshot().step,null);d.stop();pending[0]();assert.equal(d.snapshot().state,'stopped');assert.deepEqual(removed,[1]);d.start();d.offRoute();pending[1]();assert.equal(d.snapshot().state,'no-alternate');d.next();assert.equal(d.snapshot().state,'no-alternate');d.resume();assert.equal(d.snapshot().muted,true);d.next();d.next();d.next();assert.equal(d.snapshot().state,'complete');d.start();d.offRoute();d.dispose();pending[2]();d.start();assert.equal(d.snapshot().state,'stopped');
+const absent=createDemo();absent.start();absent.mute(false);assert.equal(absent.snapshot().speechAvailable,false);
+const broken=createDemo({speech:{speak(){throw Error('unavailable')},cancel(){}},makeUtterance:text=>({text})});broken.start();broken.mute(false);assert.equal(broken.snapshot().speechAvailable,false);
+console.log('PASS fixture navigation lifecycle, estimates, speech mute/fallback, reroute states, cancellation and disposal; no GPS/network/storage.');
