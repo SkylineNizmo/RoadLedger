@@ -226,6 +226,7 @@
 
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
+      window.dispatchEvent(new CustomEvent('roadledger:position',{detail:{latitude,longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp}}));
       gpsResult.textContent = 'Current GPS: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5) + ' (accuracy ±' + Math.round(position.coords.accuracy) + ' m). Not a navigation route.';
 
       const location = encodeURIComponent(

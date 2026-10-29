@@ -1,0 +1,9 @@
+/* Route weather is an explicit local fixture, never a forecast or warning service. */
+(function(){'use strict';
+const host=document.getElementById('roadledgerRadar');if(!host)return;
+const panel=document.createElement('section');panel.className='card';panel.id='routeWeatherDemo';
+panel.innerHTML='<h3>Route weather DEMO / SIMULATION</h3><p class="notice">NOT A FORECAST OR OFFICIAL WARNING. No route-weather provider is connected. Use official weather warnings and road conditions.</p><button type="button" id="routeWeatherDemoLoad" disabled>Show fictional route forecast and severe warning</button><div id="routeWeatherDemoResult" role="status" aria-live="polite">Prepare a sample route first. No real destinations are sent.</div>';
+host.after(panel);let available=false;const button=panel.querySelector('button'),result=panel.querySelector('#routeWeatherDemoResult');
+window.addEventListener('roadledger:sample-route',e=>{available=e.detail?.simulation===true&&Array.isArray(e.detail.points)&&e.detail.points.length>=2&&e.detail.points.length<=4096&&e.detail.points.every(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(p[0])&&Math.abs(p[0])<=90&&Number.isFinite(p[1])&&Math.abs(p[1])<=180);button.disabled=!available;result.textContent=available?'Sample route ready. Click to load fictional weather scenarios.':'Sample route cleared. No forecast or official warnings are available.'});
+button.onclick=()=>{if(!available)return;result.replaceChildren();for(const text of ['DEMO departure: sample rain, 65°F.','DEMO midpoint: fictional SEVERE THUNDERSTORM warning — not an actual warning.','DEMO arrival: sample wind gusts, 35 mph.','All values are local test fixtures, not live forecasts. No official alert coverage or all-clear is implied.']){const p=document.createElement('p');p.textContent=text;result.append(p)}};
+})();
