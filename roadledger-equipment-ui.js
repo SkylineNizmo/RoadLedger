@@ -18,7 +18,14 @@ function commit(next,message){equipmentProfiles(true);if(!RoadLedgerStorage.writ
 function axleVisibility(){const n=Number($('equipment-axleCount').value)||2;document.querySelectorAll('[data-axle]').forEach(el=>el.classList.toggle('hide',Number(el.dataset.axle)>n))}
 $('equipment-axleCount').oninput=axleVisibility;
 function edit(row){editing=structuredClone(row);editingSnapshot=row.id?JSON.stringify(row):null;$('equipmentEditorTitle').textContent=(row.id?'Edit ':'New ')+row.type+' profile';for(const input of $('equipmentProfileForm').querySelectorAll('input'))input.value=row[input.name]??'';axleVisibility();$('equipmentProfileEditor').classList.remove('hide');$('equipment-name').focus()}
-$('addEquipmentTruck').onclick=()=>edit({type:'truck',axleCount:2});$('addEquipmentTrailer').onclick=()=>edit({type:'trailer',axleCount:2});
+function startNewProfile(type){
+ // Always start a fresh profile, never reuse the last edited vehicle.
+ editing=null;editingSnapshot=null;
+ edit({type,axleCount:2});
+ status('Creating a new '+type+' profile. Existing equipment will not be changed.');
+ $('equipmentProfileEditor').scrollIntoView({block:'start',behavior:'smooth'});
+}
+$('addEquipmentTruck').onclick=()=>startNewProfile('truck');$('addEquipmentTrailer').onclick=()=>startNewProfile('trailer');
 $('cancelEquipmentProfile').onclick=()=>{editing=null;$('equipmentProfileEditor').classList.add('hide')};
 $('equipmentProfileForm').onsubmit=e=>{e.preventDefault();if(!editing)return;try{if(editingSnapshot!==null&&JSON.stringify(rows().find(r=>String(r.id)===String(editing.id)))!==editingSnapshot)throw Error('This profile changed while you were editing. Cancel and reopen it before saving.');const input={...editing,id:editing.id??crypto.randomUUID()};for(const el of e.target.querySelectorAll('input'))input[el.name]=el.value.trim();if(commit(model.save(data,extra,input),'Equipment profile saved on this device.')){editing=null;$('equipmentProfileEditor').classList.add('hide')}}catch(error){status(error.message)}};
 for(const button of panel.querySelectorAll('[data-equipment-view]'))button.onclick=()=>{filter=button.dataset.equipmentView;render()};
