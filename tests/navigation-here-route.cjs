@@ -1,0 +1,43 @@
+'use strict';
+const assert=require('node:assert/strict'),Core=require('../roadledger-navigation-core.js');
+const {buildTruckRequest,inspectTruckRequest,parseRoutes,verification}=require('../backend/navigation-here-route.cjs');
+const {createHereTransport}=require('../backend/navigation-here-transport.cjs');
+const {prepareRouteDisplay,createDisabledLiveAdapter}=require('../roadledger-navigation-live.js');
+const raw={requestId:'route-test-01',confirmed:true,origin:{latitude:1,longitude:2,accuracy:5,timestamp:Date.now()},destination:{latitude:3,longitude:4},stops:[],vehicle:{heightFt:14,widthFt:8.5,lengthFt:60,actualLoadedWeightLb:40000,axleCount:5,trailerCount:1}};
+const route=()=>{const f=Core.fixture();delete f.simulation;return f};
+(async()=>{
+ const saved=JSON.stringify(raw);assert.equal(verification.complete,false);
+ const review=inspectTruckRequest(raw);
+ assert.equal(review.ready,false);assert.equal(review.requestParameters,null);
+ assert.deepEqual(review.documentedVehiclePreview,{'vehicle[height]':427,'vehicle[trailerCount]':1});
+ assert.ok(Object.isFrozen(review.documentedVehiclePreview));
+ const noTrailer=inspectTruckRequest({...raw,vehicle:{...raw.vehicle,trailerCount:0}});
+ assert.equal(noTrailer.documentedVehiclePreview['vehicle[trailerCount]'],0);
+ assert.equal(noTrailer.requestParameters,null);
+ const heightBoundary=inspectTruckRequest({...raw,vehicle:{...raw.vehicle,heightFt:8.858}});
+ assert.equal(heightBoundary.documentedVehiclePreview['vehicle[height]'],270);
+ assert.deepEqual(Object.keys(review.documentedVehiclePreview).sort(),['vehicle[height]','vehicle[trailerCount]']);
+ for(const key of ['vehicle[width]','vehicle[length]','vehicle[currentWeight]','vehicle[grossWeight]','vehicle[axleCount]','vehicle[trailerAxleCount]'])assert.equal(Object.hasOwn(review.documentedVehiclePreview,key),false);
+ assert.deepEqual(review.normalizedVehicle,{heightCm:427,widthCm:260,lengthCm:1829,actualLoadedMassKg:18144,axleCount:5,trailerCount:1});
+ assert.ok(Object.isFrozen(review)&&Object.isFrozen(review.normalizedVehicle)&&Object.isFrozen(review.unresolved));
+ assert.equal(review.unresolved.length,8);
+ assert.deepEqual(inspectTruckRequest({...raw,vehicle:{...raw.vehicle,heightFt:1,widthFt:0.001,lengthFt:10,actualLoadedWeightLb:1}}).normalizedVehicle,{heightCm:31,widthCm:1,lengthCm:305,actualLoadedMassKg:1,axleCount:5,trailerCount:1});
+ for(const value of [NaN,Infinity,-1,0,'14',null,14.0001,1e20])assert.throws(()=>inspectTruckRequest({...raw,vehicle:{...raw.vehicle,heightFt:value}}),{code:'INVALID_REQUEST'});
+ for(const patch of [{grossWeight:40000},{currentWeight:40000},{weightPerAxle:8000},{trailerAxleCount:2},{tunnelCategory:'B'},{heightCm:427}])assert.throws(()=>inspectTruckRequest({...raw,vehicle:{...raw.vehicle,...patch}}),{code:'INVALID_REQUEST'});
+ assert.throws(()=>buildTruckRequest(raw,{verified:true,enabled:true}),{code:'HERE_PARAMETER_REVIEW_REQUIRED'});
+
+ assert.throws(()=>buildTruckRequest(raw),{code:'HERE_PARAMETER_REVIEW_REQUIRED'});
+ for(const bad of [{...raw,confirmed:false},{...raw,vehicle:{...raw.vehicle,hazardousGoods:'flammable'}},{...raw,vehicle:{...raw.vehicle,actualLoadedWeightLb:0}},{...raw,vehicle:{...raw.vehicle,axleCount:2.5}},{...raw,origin:{...raw.origin,timestamp:1}},{...raw,stops:Array(6).fill(raw.destination)}])assert.throws(()=>buildTruckRequest(bad),{code:'INVALID_REQUEST'});
+ assert.equal(JSON.stringify(raw),saved);
+ let requests=0;const transport=createHereTransport({enabled:true,environment:{HERE_API_KEY:'fictional-test-only'},request:()=>{requests++;throw Error('must not dispatch')}});
+ await assert.rejects(transport.execute('route',raw),{code:'HERE_PARAMETER_REVIEW_REQUIRED'});assert.equal(requests,0);
+ const value=route();value.routes[0].sections[0].notices=[{code:'restriction',title:'Check signs',severity:'critical',private:'discard'}];value.routes[0].private='discard';
+ const section=structuredClone(value.routes[0].sections[0]);value.routes[0].sections.push(section);
+ const parsed=parseRoutes(value),view=prepareRouteDisplay(parsed);
+ assert.equal(parsed.simulation,false);assert.equal(view.guidanceEnabled,false);assert.equal(view.routes[0].points.length,8);assert.equal(view.routes[0].maneuvers[3].offset,4);assert.deepEqual(view.routes[0].maneuvers[3].position,view.routes[0].points[4]);assert.equal(view.routes[0].warnings[0].severity,'critical');assert.ok(!JSON.stringify(parsed).includes('discard'));
+ assert.throws(()=>parseRoutes(Core.fixture()),{code:'HERE_INVALID_RESPONSE'});assert.throws(()=>parseRoutes({routes:[]}),{code:'HERE_NO_ROUTE'});
+ for(const mutate of [v=>v.routes.push(...Array(3).fill(v.routes[0])),v=>v.routes[0].sections[0].polyline='bad!',v=>v.routes[0].sections[0].actions[0].offset=9999,v=>delete v.routes[0].sections[0].actions[0].instruction,v=>v.routes[0].sections[0].summary.duration=-1,v=>v.routes[0].sections[0].transport.mode='car',v=>v.routes[0].sections[0].notices=[{}],v=>v.routes[0].sections[0].actions=Array(501).fill({}),v=>v.routes[0].sections=Array(11).fill({})]){const bad=route();mutate(bad);assert.throws(()=>parseRoutes(bad))}
+ const invalidView=structuredClone(parsed);invalidView.routes[0].maneuvers[0].position=[9,9];assert.throws(()=>prepareRouteDisplay(invalidView));
+ await assert.rejects(createDisabledLiveAdapter().calculate(raw),{code:'LIVE_ROUTING_DISABLED'});
+ console.log('PASS HERE route boundary: validated truck input, unverified fields fail closed before dispatch, real geometry/multi-section offsets/instructions/warnings, limits, malformed responses, display preparation and disabled adapter.');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict'),{createFixtureDetector}=require('../roadledger-navigation-demo.js');
+let now=100000;const d=createFixtureDetector({now:()=>now});
+const fix=(patch={})=>({simulation:true,latitude:36.19,longitude:-115.16,accuracy:10,timestamp:++now,...patch});
+assert.equal(d.observe(fix({simulation:false})).accepted,false);
+assert.equal(d.observe(fix({accuracy:500})).accepted,false);
+assert.equal(d.observe(fix({timestamp:1})).accepted,false);
+assert.equal(d.observe(fix()).offRoute,false);assert.equal(d.observe(fix()).offRoute,false);assert.equal(d.observe(fix()).offRoute,true);
+d.reset();const f=fix();d.observe(f);assert.equal(d.observe(f).accepted,false);assert.equal(d.observe(fix()).offRoute,false);
+assert.equal(d.observe(fix({latitude:36.1699,longitude:-115.1398})).offRoute,false);assert.equal(d.observe(fix()).offRoute,false);
+d.reset();assert.equal(d.observe(fix({latitude:NaN})).accepted,false);assert.equal(d.observe(fix({timestamp:now+100000})).accepted,false);
+d.reset();d.observe(fix());d.observe(fix());const near=fix({latitude:36.1699,longitude:-115.1407});const band=d.observe(near);assert.ok(band.distanceMeters>=50&&band.distanceMeters<=110);assert.equal(band.offRoute,false);assert.equal(d.observe(fix()).offRoute,false);assert.equal(d.observe(fix()).offRoute,false);assert.equal(d.observe(fix()).offRoute,true);assert.equal(d.observe(fix({latitude:36.1699,longitude:-115.1407})).offRoute,true);assert.equal(d.observe(fix({latitude:36.1699,longitude:-115.1398})).offRoute,false);
+console.log('PASS fixture-only off-route detector: freshness, accuracy, duplicate timestamps, three fixes, reset/hysteresis; actual GPS rejected.');

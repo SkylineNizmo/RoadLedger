@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict'),E=require('../roadledger-equipment.js'),C=require('../roadledger-navigation-core.js');
+const main={truck:'Original',trailer:'Original trailer',loads:[{id:'historical',pay:123,truck:'Old truck',trailer:'Old trailer'}]};let extras={fleet:[],maintenance:[],documents:[],expenses:[],ifta:[],unknownMetadata:{keep:true}};const saved=JSON.stringify(main);
+for(let i=0;i<200;i++)extras=E.create(main,extras,{id:'truck-'+i,name:'Truck '+i,type:'Truck',unitNumber:String(i),heightFt:13,widthFt:8,lengthFt:25,loadedWeightLb:18000,axleCount:2});
+for(let i=0;i<5;i++)extras=E.create(main,extras,{id:'trailer-'+i,name:'Trailer '+i,type:'Trailer',axleCount:3});
+assert.equal(extras.fleet.length,205);assert.throws(()=>E.create(main,extras,{id:'truck-0',name:'Overwrite',type:'truck'}));
+const prior=structuredClone(extras.fleet[1]);extras=E.save(main,extras,{...extras.fleet[0],notes:'Truck 0 only'});assert.deepEqual(extras.fleet[1],prior);
+extras=E.select(main,extras,'truck','truck-0');extras=E.select(main,extras,'trailer','trailer-0');extras=E.select(main,extras,'truck','truck-1');assert.equal(extras.activeTrailerId,'trailer-0');
+extras=E.select(main,extras,'trailer',E.POWER_ONLY);assert.equal(E.active(main,extras,'trailer'),null);assert.equal(extras.previousTrailerId,'trailer-0');assert.equal(extras.fleet.length,205);
+extras=E.rememberDefaults(main,extras);const defaults=JSON.stringify(extras);extras=E.restoreTrailer(main,extras);assert.equal(extras.activeTruckId,'truck-1');assert.equal(extras.activeTrailerId,'trailer-0');assert.equal(extras.powerOnly,false);
+extras=E.applyDefaults(main,extras);assert.equal(extras.powerOnly,true);assert.equal(extras.activeTruckId,'truck-1');assert.equal(extras.previousTrailerId,'trailer-0');assert.equal(C.prefill(main,extras).values.length,25);assert.equal(C.prefill(main,extras).values.weight,18000);assert.equal(C.prefill(main,extras).values.axles,2);assert.match(C.prefill(main,extras).notes.join(' '),/POWER ONLY/);
+const restored=JSON.parse(defaults);assert.equal(E.active(main,restored,'truck').id,'truck-1');assert.equal(E.active(main,restored,'trailer'),null);assert.throws(()=>E.applyDefaults(main,{...extras,defaultTruckId:'missing'}));assert.equal(JSON.stringify(main),saved);assert.deepEqual(extras.unknownMetadata,{keep:true});console.log('PASS 205 profiles, duplicate prevention, independent edit/switch, Power Only/restore/default/reload, truck-only route specs and immutable legacy records.');
