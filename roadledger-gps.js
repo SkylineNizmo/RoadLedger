@@ -64,17 +64,7 @@ gpsPanel.innerHTML=`
 
     <label for="gpsDeparture">Departure time (planning only; not used by a live routing provider)</label><input id="gpsDeparture" type="datetime-local"><h3>📍 Additional Stops</h3>
 
-    <input
-      type="text"
-      id="gpsStopInput"
-      placeholder="Enter pickup, fuel stop, or delivery"
-    >
-
-    <button type="button" id="gpsAddStop">
-      + Add Stop
-    </button>
-
-    <div id="gpsStopsList"></div>
+    <div id="gpsSharedStops"></div>
 
     <h3>🚛 Truck Specifications</h3><p id="gpsEquipmentStatus" class="notice"></p><div id="gpsEquipmentDetails"></div><p class="muted">Editable suggestions from My Equipment. Coupled length and combined loaded weight must be confirmed, never inferred by adding ratings or overlapping measurements. Manual trip edits stay in this tab only.</p>
 
@@ -161,17 +151,18 @@ gpsPanel.innerHTML=`
       or bridge clearance has been verified.
     </p>
   `;
-tab.append(gpsPanel);
-if(new URLSearchParams(location.search).get('demo')==='navigation'&&['localhost','127.0.0.1','[::1]'].includes(location.hostname))RoadLedgerNavigationDemo.mount(gpsPanel);
+tab.insertBefore(gpsPanel,$('routeSavedSettings'));$('gpsSharedStops').append($('routeStopsCard'));
+
 const mapSection=document.createElement('section');mapSection.innerHTML=`<h3>🗺️ Live GPS Map</h3><p class="notice"><strong>Any orange dashed route is SIMULATED — NOT SAFE FOR REAL NAVIGATION.</strong> The blue/gray marker is your last GPS fix; the sample route is unrelated to it. Basemap tiles require internet; blank offline tiles do not affect saved records.</p><div id="roadledgerLiveMap" style="width:100%;height:420px;border-radius:12px;overflow:hidden;background:#202b38" role="region" aria-label="Interactive GPS map"></div><div class="actions"><button type="button" id="roadledgerFollowGps">📍 Follow My Location</button><button type="button" id="gpsShowSampleRoute" class="secondary">View sample route area</button></div><p id="roadledgerMapStatus" role="status" class="muted">Loading interactive map…</p>`;gpsPanel.prepend(mapSection);
 for(const id of ['gpsLocationStatus','gpsRouteStatus','gpsEquipmentStatus']){$(id).setAttribute('role','status');$(id).setAttribute('aria-live','polite')}
 const fieldIds={height:'gpsTruckHeight',width:'gpsTruckWidth',weight:'gpsTruckWeight',length:'gpsTruckLength',axles:'gpsTruckAxles'};
-let map=null,mapIssue='Loading local map…',marker=null,accuracyCircle=null,routeLayer=null,lastRoute=null,following=false,mapReady=null,plannedStops=[],generation=0,controller=null,equipmentSignature=null,equipmentReadable=true,externalChange=false,ticker=null,lastGPSState='',dirty=new Set();
+let radarOwnsWatcher=false;
+let map=null,mapIssue='Loading local map…',marker=null,accuracyCircle=null,routeLayer=null,lastRoute=null,following=false,mapReady=null,generation=0,controller=null,equipmentSignature=null,equipmentReadable=true,externalChange=false,ticker=null,lastGPSState='',dirty=new Set();
 const adapter=C.createMockAdapter(),disabledLiveAdapter=RoadLedgerNavigationLive.createDisabledLiveAdapter();
 function status(id,message){if($(id).textContent!==message)$(id).textContent=message}
 function clearRoute(){window.dispatchEvent(new CustomEvent('roadledger:sample-route',{detail:null}));if(routeLayer&&map)map.removeLayer(routeLayer);routeLayer=null;lastRoute=null;$('gpsRouteSummary').replaceChildren();$('gpsDistance').textContent='Not calculated';$('gpsTravelTime').textContent='Not calculated'}
 function invalidate(message){generation++;controller?.abort();controller=null;clearRoute();if(message)status('gpsRouteStatus',message)}
-function stop(reason='stopped'){following=false;session.stop(reason);invalidate('Tracking stopped or suspended. Get a fresh fix before preparing another sample route.')}
+function stop(reason='stopped'){radarOwnsWatcher=false;following=false;session.stop(reason);invalidate('Tracking stopped or suspended. Get a fresh fix before preparing another sample route.')}
 function gpsMessage(s){
  const messages={idle:'Tap Start Tracking or Use My Current GPS Location.',requesting:'Requesting GPS location…',stopped:'Tracking stopped. Last fix is not a current route origin.',suspended:'Tracking paused because this page was hidden. Tap Start Tracking to resume.',denied:'Location permission denied. Allow location in browser settings, then retry.',timeout:'GPS timed out. Tracking stopped; retry when a signal is available.',unavailable:'GPS unavailable. Tracking stopped; retry when ready.',unsupported:'GPS is not supported by this browser.',invalid:'GPS returned invalid coordinates or a future timestamp. Route preparation is blocked.',stale:'Last GPS fix is stale. Get a new fix before preparing a route.','poor-accuracy':'GPS accuracy is worse than 100 m. Waiting for a better fix; route preparation is blocked.'};
  return messages[s.status]||(s.tracking?'GPS tracking active':'GPS fix received');
@@ -179,6 +170,7 @@ function gpsMessage(s){
 function renderGPS(s){
  $('gpsStartTracking').disabled=s.tracking;$('gpsStopTracking').disabled=!s.tracking&&s.status!=='requesting';
  if(s.position)window.dispatchEvent(new CustomEvent('roadledger:position',{detail:{...s.position,usable:s.usable}}));
+ window.dispatchEvent(new CustomEvent('roadledger:gps-state',{detail:{tracking:s.tracking,status:s.status,usable:s.usable}}));
  const p=s.position,detail=p?' • last fix '+new Date(p.timestamp).toLocaleTimeString()+' • accuracy ±'+Math.round(p.accuracy)+' m':'';
  status('gpsLocationStatus',gpsMessage(s)+detail);
  status('gpsCurrentLocation',p?p.latitude.toFixed(5)+', '+p.longitude.toFixed(5)+(s.usable?'':' (last known)'):'Not detected');
@@ -188,9 +180,9 @@ function renderGPS(s){
 }
 const session=C.createGPS({geolocation:navigator.geolocation,onChange:renderGPS});
 $('gpsDetectLocation').onclick=()=>session.locate();
-$('gpsStartTracking').onclick=()=>{following=true;session.start();renderGPS(session.snapshot())};
+$('gpsStartTracking').onclick=()=>{radarOwnsWatcher=false;following=true;session.start();renderGPS(session.snapshot())};
 $('gpsStopTracking').onclick=()=>stop();
-$('roadledgerFollowGps').onclick=()=>{following=true;session.start();renderGPS(session.snapshot())};
+$('roadledgerFollowGps').onclick=()=>{radarOwnsWatcher=false;following=true;session.start();renderGPS(session.snapshot())};
 function loadLeaflet(){
  if(mapReady)return mapReady;
  mapReady=new Promise((resolve,reject)=>{const css=document.createElement('link'),script=document.createElement('script');css.rel='stylesheet';css.href='./vendor/leaflet-1.9.4/leaflet.css';css.integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';css.crossOrigin='anonymous';script.src='./vendor/leaflet-1.9.4/leaflet.js';script.integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';script.crossOrigin='anonymous';let styled=false,loaded=false,done=false;
@@ -211,12 +203,11 @@ function prefill(){
 }
 for(const [name,id]of Object.entries(fieldIds))$(id).addEventListener('input',()=>{dirty.add(name);$('gpsConfirmCombination').checked=false;invalidate('Measurements changed. Confirm the loaded combination again.')});
 for(const id of ['gpsDestination','gpsDeparture','gpsConfirmCombination','gpsSimulationScenario','gpsRoutingBackend'])$(id).addEventListener(id==='gpsDestination'?'input':'change',()=>invalidate('Route inputs changed. Prepare another simulated route.'));
-function renderStops(){const list=$('gpsStopsList');list.replaceChildren();plannedStops.forEach((stop,i)=>{const row=document.createElement('p'),remove=document.createElement('button');row.append(document.createTextNode((i+1)+'. '+stop+' '));remove.type='button';remove.className='secondary';remove.textContent='Remove';remove.onclick=()=>{plannedStops.splice(i,1);invalidate('Stops changed. Prepare another sample.');renderStops()};row.append(remove);list.append(row)})}
-$('gpsAddStop').onclick=()=>{const value=$('gpsStopInput').value.trim();if(!value)return;if(value.length>500||plannedStops.length>=20){status('gpsRouteStatus','Use at most 20 stops, each no longer than 500 characters.');return}plannedStops.push(value);$('gpsStopInput').value='';invalidate('Stops changed. Prepare another sample.');renderStops()};
-function inputs(){const s=session.snapshot();if(!equipmentReadable)throw Error('Selected equipment is unavailable. Review My Equipment before planning.');if(externalChange)throw Error('Equipment/records changed in another tab. Reload before planning; nothing has been overwritten.');if(!s.usable)throw Error('Get a fresh GPS fix with accuracy of 100 m or better.');return C.validateInput({origin:s.position,destination:$('gpsDestination').value,stops:[...plannedStops],measurements:Object.fromEntries(Object.entries(fieldIds).map(([k,id])=>[k,$(id).value])),confirmed:$('gpsConfirmCombination').checked})}
+window.addEventListener('roadledger:route-stops',()=>invalidate('Saved stops changed. Prepare another sample route.'));
+function inputs(){const s=session.snapshot();if(!equipmentReadable)throw Error('Selected equipment is unavailable. Review My Equipment before planning.');if(externalChange)throw Error('Equipment/records changed in another tab. Reload before planning; nothing has been overwritten.');if(!s.usable)throw Error('Get a fresh GPS fix with accuracy of 100 m or better.');return C.validateInput({origin:s.position,destination:$('gpsDestination').value,stops:window.RoadLedgerRoutePlan.snapshot().stops,measurements:Object.fromEntries(Object.entries(fieldIds).map(([k,id])=>[k,$(id).value])),confirmed:$('gpsConfirmCombination').checked})}
 $('gpsPlanRoute').onclick=async()=>{
  invalidate();const token=generation;
- try{const request=inputs();controller=new AbortController();const signal=controller.signal;status('gpsRouteStatus','Calculating LOCAL SIMULATION… No HERE request is made.');const selectedAdapter=$('gpsRoutingBackend').value==='local-mock'?adapter:disabledLiveAdapter;const raw=await selectedAdapter.calculate(request,{signal,scenario:$('gpsSimulationScenario').value});if(token!==generation||signal.aborted)return;inputs();const route=C.parseResponse(raw);if(token!==generation)return;lastRoute=route;window.dispatchEvent(new CustomEvent('roadledger:sample-route',{detail:{simulation:true,points:route.points.map(p=>[...p])}}));drawRoute();$('gpsDistance').textContent=(route.length/1000).toFixed(1)+' km (SAMPLE)';$('gpsTravelTime').textContent=Math.round(route.duration/60)+' min (SAMPLE)';const list=$('gpsRouteSummary'),heading=document.createElement('h3');heading.textContent='NAVIGATION PREVIEW — NOT VERIFIED FOR COMMERCIAL TRUCK ROUTING. SIMULATED ROUTE — NOT SAFE FOR REAL NAVIGATION';list.append(heading);for(const warning of route.warnings){const p=document.createElement('p');p.className='notice';p.textContent=warning;list.append(p)}const maneuvers=document.createElement('ol');for(const maneuver of route.maneuvers){const li=document.createElement('li');li.textContent=maneuver.instruction;maneuvers.append(li)}if(new URLSearchParams(location.search).get('demo')==='navigation'&&['localhost','127.0.0.1','[::1]'].includes(location.hostname))list.append(maneuvers);else{const note=document.createElement('p');note.textContent='Turn-by-turn guidance is unavailable until commercial routing is verified.';list.append(note);}status('gpsRouteStatus','LOCAL SAMPLE ONLY. Use View sample route area to inspect the fixture; it is not a route to your destination.');
+ try{const request=inputs();controller=new AbortController();const signal=controller.signal;status('gpsRouteStatus','Calculating LOCAL SIMULATION… No HERE request is made.');const selectedAdapter=$('gpsRoutingBackend').value==='local-mock'?adapter:disabledLiveAdapter;const raw=await selectedAdapter.calculate(request,{signal,scenario:$('gpsSimulationScenario').value});if(token!==generation||signal.aborted)return;inputs();const route=C.parseResponse(raw);if(token!==generation)return;lastRoute=route;window.dispatchEvent(new CustomEvent('roadledger:sample-route',{detail:{simulation:true,points:route.points.map(p=>[...p])}}));drawRoute();$('gpsDistance').textContent=(route.length/1000).toFixed(1)+' km (SAMPLE)';$('gpsTravelTime').textContent=Math.round(route.duration/60)+' min (SAMPLE)';const list=$('gpsRouteSummary'),heading=document.createElement('h3');heading.textContent='NAVIGATION PREVIEW — NOT VERIFIED FOR COMMERCIAL TRUCK ROUTING. SIMULATED ROUTE — NOT SAFE FOR REAL NAVIGATION';list.append(heading);for(const warning of route.warnings){const p=document.createElement('p');p.className='notice';p.textContent=warning;list.append(p)}const note=document.createElement('p');note.textContent='Turn-by-turn guidance is unavailable until commercial routing is verified.';list.append(note);status('gpsRouteStatus','LOCAL SAMPLE ONLY. Use View sample route area to inspect the fixture; it is not a route to your destination.');
  }catch(error){if(token!==generation||error.name==='AbortError')return;clearRoute();status('gpsRouteStatus',error.message||'Local simulation failed. Existing records are unchanged.')}finally{if(token===generation)controller=null}
 };
 window.addEventListener('roadledger:saved',()=>queueMicrotask(prefill));
@@ -224,6 +215,6 @@ window.addEventListener('storage',e=>{if(e.key===null||[key,extraKey].includes(e
 function startTicker(){clearInterval(ticker);ticker=setInterval(()=>{if(!document.hidden)renderGPS(session.snapshot())},1000)}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stop('suspended');else renderGPS(session.snapshot())});
 window.addEventListener('pagehide',()=>{stop('suspended');clearInterval(ticker)});window.addEventListener('pageshow',()=>{startTicker();renderGPS(session.snapshot())});
-window.RoadLedgerGPS=Object.freeze({snapshot:session.snapshot});
+window.RoadLedgerGPS=Object.freeze({snapshot:session.snapshot,startRadarTracking(){if(!session.snapshot().tracking)radarOwnsWatcher=true;session.start()},stopRadarTracking(){if(radarOwnsWatcher){radarOwnsWatcher=false;stop('stopped')}}});
 prefill();renderGPS(session.snapshot());startTicker();initializeMap();
 })();

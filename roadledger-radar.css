@@ -10,3 +10,5 @@
 @media print{#roadledgerRadar{display:none!important}}
 
 .radar-overlay-hidden .roadledger-radar-precipitation{display:none!important}
+
+.radar-auto-follow input{display:inline;width:auto;height:auto;min-height:0;margin-right:8px}

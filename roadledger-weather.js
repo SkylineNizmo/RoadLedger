@@ -19,19 +19,10 @@
   let weatherStarted = false;
   let lastWeatherUpdate = 0;
 
-  const gpsButton =
-    document.getElementById("routeLocation");
-
-  const gpsResult =
-    document.getElementById("routeLocationResult");
-
-  const weatherTab =
-    document.getElementById("routeweatherTab");
-
-  if (!gpsButton || !gpsResult || !weatherTab) {
-    console.warn("RoadLedger weather elements missing.");
-    return;
-  }
+  const weatherTab=document.getElementById('routeweatherTab');
+  if(!weatherTab)return;
+  const gpsButton=document.createElement('button');gpsButton.type='button';gpsButton.id='routeLocation';gpsButton.textContent='Refresh weather near my GPS location';
+  const gpsResult=document.createElement('p');gpsResult.id='routeLocationResult';gpsResult.className='muted';gpsResult.setAttribute('aria-live','polite');gpsResult.textContent='GPS permission is optional. Refresh to request current weather.';
 
   // Create the weather dashboard.
   const dashboard = document.createElement("section");
@@ -111,6 +102,8 @@
     weatherTab.firstElementChild
   );
 
+  dashboard.append(gpsButton,gpsResult);
+
   function setText(id, value) {
     const element = document.getElementById(id);
 
@@ -119,7 +112,7 @@
     }
   }
 
-  const coverage=document.createElement('p');coverage.id='weatherCoverage';coverage.className='notice';coverage.textContent='Route forecasts, rain/snow classification and official severe-weather alerts are not supplied by this integration. Radar is observed reflectivity, not a forecast or an all-clear. ';const link=document.createElement('a');link.href='https://www.weather.gov/alerts';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Check official NWS warnings';coverage.append(link);dashboard.append(coverage);const refresh=document.createElement('button');refresh.type='button';refresh.id='weatherRefresh';refresh.textContent='Refresh weather near my GPS location';refresh.onclick=()=>startWeatherUpdates(true);dashboard.append(refresh);
+  const coverage=document.createElement('p');coverage.id='weatherCoverage';coverage.className='notice';coverage.textContent='Route forecasts, rain/snow classification and official severe-weather alerts are not supplied by this integration. Radar is observed reflectivity, not a forecast or an all-clear. ';const link=document.createElement('a');link.href='https://www.weather.gov/alerts';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Check official NWS warnings';coverage.append(link);dashboard.append(coverage);
   function formatNumber(value, digits = 0) {
     const number = typeof value==='number'?value:NaN;
 
@@ -304,18 +297,7 @@
     }
   }
 
-  // Start automatic updates after the GPS button is used.
-  // Capture phase prevents the original GPS handler
-  // from making a duplicate weather API request.
-  gpsButton.addEventListener(
-    "click",
-    function (event) {
-      event.stopImmediatePropagation();
-
-      startWeatherUpdates(true);
-    },
-    true
-  );
+  gpsButton.addEventListener('click',()=>startWeatherUpdates(true));
 
   // Refresh stale weather when returning to RoadLedger.
   document.addEventListener(
