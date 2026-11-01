@@ -11,9 +11,9 @@ function handle(spoken){
  if(match){showTab('equipment');const rows=equipmentProfiles(true).filter(r=>String(r.type).toLowerCase()===match[1]&&[r.unitNumber,r.name].some(v=>String(v||'').toLowerCase()===match[2]));if(rows.length!==1)return 'No unique equipment match. Select the profile manually.';const el=document.getElementById(match[1]==='truck'?'activeTruck':'activeTrailer');el.value=String(rows[0].id);el.dispatchEvent(new Event('change'));return document.getElementById('equipmentStatus').textContent}
  if(/^(open|show) navigation$/.test(phrase)){openWeather();return 'Opened navigation preview. Not verified for commercial truck routing.'}
  if(/^show my location$/.test(phrase)){openWeather();document.getElementById('gpsDetectLocation').click();return 'Requested GPS location. Browser permission is required.'}
- if(/^(show|open) weather radar$/.test(phrase)){openWeather();document.getElementById('roadledgerRadar').scrollIntoView({block:'start'});return 'Opened radar. Tap Load / refresh to request observations.'}
+ if(/^(show|open) weather radar$/.test(phrase)){openWeather();document.getElementById('getrightWeatherPanel').open=true;document.getElementById('roadledgerRadar').scrollIntoView({block:'start'});return 'Opened radar. Tap Load / refresh to request observations.'}
  if(/^refresh weather$/.test(phrase)){openWeather();document.getElementById('routeLocation').click();return 'Requested current weather. Check the status for availability.'}
- if(/^show severe weather alerts$/.test(phrase)){openWeather();document.getElementById('weatherCoverage').scrollIntoView({block:'center'});return 'An official severe-weather alert feed is not connected. No all-clear is implied; check the official warnings link.'}
+ if(/^show severe weather alerts$/.test(phrase)){openWeather();document.getElementById('getrightWeatherPanel').open=true;document.getElementById('weatherCoverage').scrollIntoView({block:'center'});return 'An official severe-weather alert feed is not connected. No all-clear is implied; check the official warnings link.'}
  return null;
 }
 window.GetRightCommands=Object.freeze({handle});
