@@ -91,7 +91,8 @@
     for (const row of result.extras.expenses) if (!Number.isFinite(row.amount) || row.amount <= 0) fail('invalid expense amount');
     for (const row of result.extras.fleet) if (typeof row.name !== 'string' || !row.name.trim() || !['truck','trailer'].includes(String(row.type).toLowerCase())) fail('invalid fleet equipment');
     for (const row of result.extras.fleet) if (row.equipmentVersion !== undefined) RoadLedgerEquipment.validate(row);
-    for (const field of ['activeTruckId','activeTrailerId']) if (result.extras[field] !== undefined && typeof result.extras[field] !== 'string') fail('invalid active equipment reference');
+    for (const field of ['activeTruckId','activeTrailerId','previousTrailerId','defaultTruckId','defaultTrailerId']) if (result.extras[field] !== undefined && typeof result.extras[field] !== 'string') fail('invalid active equipment reference');
+    for(const field of ['powerOnly','defaultPowerOnly'])if(result.extras[field]!==undefined&&typeof result.extras[field]!=='boolean')fail('invalid equipment mode');
     for (const row of result.extras.ifta) if (!/^[A-Z]{2}$/.test(row.state) || !Number.isFinite(row.miles)) fail('invalid jurisdiction record');
     for (const row of result.extras.expenses) { row.gallons ??= 0; row.payer ??= 'business'; if (!['business','driver','reimbursed'].includes(row.payer)) fail('invalid expense payer'); }
     for (const row of result.extras.ifta) row.gallons ??= 0;

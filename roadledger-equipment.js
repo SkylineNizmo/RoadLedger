@@ -42,7 +42,7 @@ function profiles(main,extras){
  }
  return rows;
 }
-function active(main,extras,type){const rows=profiles(main,extras);const id=extras[type==='truck'?'activeTruckId':'activeTrailerId'];if(id==='')return null;if(present(id))return rows.find(r=>(String(r.id)===String(id)||r.equipmentLegacyId===String(id))&&String(r.type).toLowerCase()===type)||null;return rows.find(r=>r.equipmentLegacySource===type)||null}
+function active(main,extras,type){if(type==='trailer'&&extras.powerOnly===true)return null;const rows=profiles(main,extras);const id=extras[type==='truck'?'activeTruckId':'activeTrailerId'];if(id==='')return null;if(present(id))return rows.find(r=>(String(r.id)===String(id)||r.equipmentLegacyId===String(id))&&String(r.type).toLowerCase()===type)||null;return rows.find(r=>r.equipmentLegacySource===type)||null}
 function save(main,extras,input){
  const rows=profiles(main,extras),old=rows.find(r=>String(r.id)===String(input.id));
  const row={...old,...clone(input),equipmentVersion:1};if(old&&!old.equipmentVersion)row.equipmentLegacyName=old.name;validate(row);
@@ -54,8 +54,27 @@ function save(main,extras,input){
  // Validate IDs and source links before making a single durable write.
  profiles(main,next);return next;
 }
-function select(main,extras,type,id){if(!['truck','trailer'].includes(type))throw Error('Invalid equipment type');if(id&&!profiles(main,extras).some(r=>String(r.id)===String(id)&&String(r.type).toLowerCase()===type))throw Error('Select a current '+type);return {...clone(extras),[type==='truck'?'activeTruckId':'activeTrailerId']:id}}
+const POWER_ONLY='@power-only';
+function create(main,extras,input){if(profiles(main,extras).some(r=>String(r.id)===String(input.id)))throw Error('Equipment ID already exists. No profile was changed.');return save(main,extras,input)}
+function select(main,extras,type,id){
+ if(!['truck','trailer'].includes(type))throw Error('Invalid equipment type');
+ const next=clone(extras);
+ if(type==='trailer'&&id===POWER_ONLY){const previous=active(main,extras,'trailer');if(previous)next.previousTrailerId=String(previous.id);next.powerOnly=true;next.activeTrailerId='';return next}
+ if(id&&!profiles(main,extras).some(r=>String(r.id)===String(id)&&String(r.type).toLowerCase()===type))throw Error('Select a current '+type);
+ next[type==='truck'?'activeTruckId':'activeTrailerId']=id;
+ if(type==='trailer'){next.powerOnly=false;if(id)next.previousTrailerId=id}
+ return next;
+}
+function rememberDefaults(main,extras){
+ const next=clone(extras);next.defaultTruckId=String(active(main,extras,'truck')?.id||'');next.defaultTrailerId=String(active(main,extras,'trailer')?.id||'');next.defaultPowerOnly=extras.powerOnly===true;return next;
+}
+function applyDefaults(main,extras){
+ if(extras.defaultTruckId===undefined)throw Error('Save default equipment first.');
+ let next=select(main,extras,'truck',extras.defaultTruckId);
+ return select(main,next,'trailer',extras.defaultPowerOnly===true?POWER_ONLY:extras.defaultTrailerId||'');
+}
+function restoreTrailer(main,extras){if(!extras.previousTrailerId)throw Error('No previous trailer is saved. Select a trailer.');return select(main,extras,'trailer',extras.previousTrailerId)}
 function link(main,extras,id,type){const target=profiles(main,extras).find(r=>String(r.id)===String(id));if(!target||String(target.type).toLowerCase()!==type)throw Error('Select matching equipment.');if(target.equipmentLegacySource&&target.equipmentLegacySource!==type)throw Error('Already linked.');const original=legacy(main,type);if(!original)throw Error('No original equipment settings.');if((extras.fleet||[]).some(r=>r.equipmentLegacySource===type&&String(r.id)!==String(id)))throw Error('Original settings already linked.');const alias=profiles(main,extras).find(r=>r.equipmentLegacySource===type);const merged={...target,equipmentLegacySource:type,...(alias&&String(alias.id)!==String(target.id)?{equipmentLegacyId:String(alias.id)}:{})};for(const [k,v]of Object.entries(original))if(k!=='id'&&k!=='type'&&!present(merged[k]))merged[k]=v;return save(main,extras,merged)}
-const api={NUMBER_FIELDS,DATE_FIELDS,TEXT_FIELDS,validDate,validate,legacy,profiles,active,save,select,link};
+const api={NUMBER_FIELDS,DATE_FIELDS,TEXT_FIELDS,validDate,validate,legacy,profiles,active,save,create,select,link,POWER_ONLY,rememberDefaults,applyDefaults,restoreTrailer};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RoadLedgerEquipment=api;
 })(typeof window==='undefined'?globalThis:window);

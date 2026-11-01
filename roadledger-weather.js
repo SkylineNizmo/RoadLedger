@@ -119,8 +119,9 @@
     }
   }
 
+  const coverage=document.createElement('p');coverage.id='weatherCoverage';coverage.className='notice';coverage.textContent='Route forecasts, rain/snow classification and official severe-weather alerts are not supplied by this integration. Radar is observed reflectivity, not a forecast or an all-clear. ';const link=document.createElement('a');link.href='https://www.weather.gov/alerts';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Check official NWS warnings';coverage.append(link);dashboard.append(coverage);const refresh=document.createElement('button');refresh.type='button';refresh.id='weatherRefresh';refresh.textContent='Refresh weather near my GPS location';refresh.onclick=()=>startWeatherUpdates(true);dashboard.append(refresh);
   function formatNumber(value, digits = 0) {
-    const number = Number(value);
+    const number = typeof value==='number'?value:NaN;
 
     if (value === "" || value === null ||
         value === undefined ||
@@ -131,10 +132,11 @@
     return number.toFixed(digits);
   }
 
+  function clearWeather(){for(const id of ['weatherTemp','weatherFeels','weatherWind','weatherGust','weatherHumidity','weatherRain','weatherVisibility','weatherClouds'])setText(id,'Unavailable');setText('weatherUpdated','Current observation unavailable. Refresh required.');}
   function displayWeather(weather, latitude, longitude) {
     const values = weather?.data?.values;
 
-    if (!values) {
+    if (!values || typeof values!=='object' || Array.isArray(values) || !Object.values(values).some(v=>typeof v==='number'&&Number.isFinite(v))) {
       throw new Error("Weather data unavailable.");
     }
 
@@ -180,12 +182,12 @@
 
     setText(
       "weatherUpdated",
-      "Last updated: " + new Date().toLocaleString()
+      (Number.isFinite(Date.parse(weather.data.time))?'Provider observation: '+new Date(weather.data.time).toLocaleString():'Provider timestamp not supplied')+' • checked '+new Date().toLocaleString()
     );
 
     setText(
       "weatherStatus",
-      "📍 GPS weather active — " +
+      (Number.isFinite(Date.parse(weather.data.time))&&Date.now()-Date.parse(weather.data.time)>1800000?'STALE observation — ':'📍 Weather received — ') +
       latitude.toFixed(4) + ", " +
       longitude.toFixed(4)
     );
@@ -226,6 +228,7 @@
 
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
+      window.dispatchEvent(new CustomEvent('roadledger:position',{detail:{latitude,longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp}}));
       gpsResult.textContent = 'Current GPS: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5) + ' (accuracy ±' + Math.round(position.coords.accuracy) + ' m). Not a navigation route.';
 
       const location = encodeURIComponent(
@@ -243,14 +246,14 @@
         );
       }
 
-      const weather = await response.json();
+      const weather = await RoadLedgerProtocol.readResponse(response,262144);
 
       displayWeather(weather, latitude, longitude);
 
       lastWeatherUpdate = Date.now();
 
   } catch (error) {
-
+  clearWeather();
   let message = "⚠️ Weather update failed. Please try again.";
 
   if (error.code === 1) {
@@ -332,6 +335,5 @@
     "RoadLedger Weather Dashboard initialized."
   );
 
-   // Automatically load weather when RoadLedger opens.
-startWeatherUpdates();
+   // GPS and weather requests start only after an explicit user action.
 })();
