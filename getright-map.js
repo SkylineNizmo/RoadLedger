@@ -22,6 +22,11 @@ planner.querySelector('h2').textContent='Trip setup';
 for(const heading of planner.querySelectorAll('h3'))if(/Destination|Additional Stops/.test(heading.textContent))heading.remove();
 $('getrightWeatherContents').append($('roadledgerRadar'),$('roadledgerWeatherDashboard'));
 document.querySelector('nav [data-tab="routeweather"]').textContent='🗺️ Map & Navigation';
+// Persist only presentation state; never rewrite saved equipment or load records.
+const EQUIPMENT_PANEL_KEY='getright-equipment-panel-open';
+const tripPanel=$('getrightTripPanel');
+try{tripPanel.open=localStorage.getItem(EQUIPMENT_PANEL_KEY)==='true'}catch{}
+tripPanel.addEventListener('toggle',()=>{try{localStorage.setItem(EQUIPMENT_PANEL_KEY,String(tripPanel.open))}catch{}});
 function openTrip(focus){$('getrightTripPanel').open=true;$(focus).focus();$(focus).scrollIntoView({block:'nearest',behavior:'smooth'})}
 $('getrightPlanTrip').onclick=()=>openTrip('gpsConfirmCombination');
 $('getrightAddStop').onclick=()=>openTrip('routeStopInput');
