@@ -13,7 +13,7 @@ screen.innerHTML=`<div class="getright-map-heading"><h2>Map &amp; Navigation</h2
 tab.prepend(screen);
 const mapSection=$('roadledgerLiveMap').parentElement;
 $('getrightMapStage').prepend($('roadledgerLiveMap'));
-for(const id of ['radarToggle','roadledgerFollowGps','gpsStartTracking','gpsStopTracking'])$('getrightMapTools').append($(id));
+for(const id of ['radarToggle','roadledgerFollowGps','getrightCompass','gpsStartTracking','gpsStopTracking'])$('getrightMapTools').append($(id));
 for(const id of ['roadledgerMapStatus','radarStatus','radarFrameTime'])$('getrightMapStatus').append($(id));
 const destination=$('gpsDestination');destination.placeholder='Where are you headed?';$('getrightDestinationRow').prepend(destination);
 $('getrightTripContents').append(planner,$('gpsShowSampleRoute'),$('routeSavedSettings'));
