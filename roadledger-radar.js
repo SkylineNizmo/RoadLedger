@@ -34,9 +34,13 @@ async function refresh(){if(!pageActive||!visible())return;if(!navigator.onLine)
  const result=await json(SERVICE+'/query?'+params,requestController.signal);if(!Array.isArray(result.features)||result.features.length>2000)throw Error('Unsupported radar catalogue');const times=[...new Set(result.features.map(f=>f.attributes?.[field]).filter(t=>validTime(t)&&t>=Date.now()-10800000))].sort((a,b)=>a-b).slice(-12);if(!times.length)throw Error('No recent radar observations');if(token!==generation||requestController.signal.aborted||!pageActive||!visible()||!navigator.onLine)return;
  frames=times;sourceTime=extent[1];lastFetch=Date.now();$('radarUpdated').textContent='Source update: '+new Date(sourceTime).toLocaleString()+' • checked '+new Date(lastFetch).toLocaleTimeString();controls();if(frames.length>1){playing=true;$('radarPlay').textContent='Pause radar';$('radarPlay').setAttribute('aria-pressed','true')}showFrame(frames.length>1?0:frames.length-1);
  }catch{if(token===generation)fail('Radar data unavailable. Automatic retry when the map is open. Live weather and saved records are unchanged.')}finally{clearTimeout(timer);if(token===generation){fetching=false;controller=null;}}}
+const RADAR_PREFERENCE_KEY='getright-radar-overlay-enabled';
 let overlayEnabled=true;
-$('radarToggle').textContent='Radar overlay: ON';$('radarToggle').setAttribute('aria-pressed','true');
-$('radarToggle').onclick=()=>{overlayEnabled=!overlayEnabled;pause();clearPending();if(layer)layer.setOpacity(overlayEnabled?0.7:0);$('radarToggle').textContent='Radar overlay: '+(overlayEnabled?'ON':'OFF');$('roadledgerLiveMap').classList.toggle('radar-overlay-hidden',!overlayEnabled);status(overlayEnabled?'Radar overlay visible. Check observation timestamp.':'Radar overlay OFF. GPS and map remain visible.')};
+try{overlayEnabled=localStorage.getItem(RADAR_PREFERENCE_KEY)!=='false'}catch{}
+$('radarToggle').textContent='Radar overlay: '+(overlayEnabled?'ON':'OFF');
+$('radarToggle').setAttribute('aria-pressed',String(overlayEnabled));
+$('roadledgerLiveMap').classList.toggle('radar-overlay-hidden',!overlayEnabled);
+$('radarToggle').onclick=()=>{overlayEnabled=!overlayEnabled;try{localStorage.setItem(RADAR_PREFERENCE_KEY,String(overlayEnabled))}catch{};pause();clearPending();if(layer)layer.setOpacity(overlayEnabled?0.7:0);if(overlayEnabled&&frames.length&&navigator.onLine)showFrame(frames.length-1);$('radarToggle').textContent='Radar overlay: '+(overlayEnabled?'ON':'OFF');$('roadledgerLiveMap').classList.toggle('radar-overlay-hidden',!overlayEnabled);status(overlayEnabled?'Radar overlay visible. Check observation timestamp.':'Radar overlay OFF. GPS and map remain visible.')};
 
 $('radarPlay').onclick=()=>{if(playing){pause();return}if($('radarPlay').disabled)return;playing=true;$('radarPlay').textContent='Pause radar';$('radarPlay').setAttribute('aria-pressed','true');showFrame(index+1)};
 $('radarTimeline').oninput=()=>{pause();showFrame(Number($('radarTimeline').value))};
