@@ -12,7 +12,7 @@ function createGPS({geolocation,now=()=>Date.now(),onChange=()=>{}}){
  function snapshot(){const age=position?Math.max(0,now()-position.timestamp):null;const current=status==='ready'&&age<=MAX_AGE;return {position:position?clone(position):null,tracking,status:status==='ready'&&!current?'stale':status,ageMs:age,usable:!!(current&&position.accuracy<=MAX_ACCURACY)}}
  function emit(){onChange(snapshot())}
  function stop(reason='stopped'){epoch++;once++;if(watchId!==null){try{geolocation.clearWatch(watchId)}catch{}watchId=null}tracking=false;status=reason;emit()}
- function error(e){stop(e?.code===1?'denied':e?.code===3?'timeout':'unavailable')}
+ function error(e){if(e?.code===1){stop('denied');return}/* Transient watch errors do not terminate the watcher; a later fix can recover. */status=e?.code===3?'timeout':'unavailable';emit()}
  function accept(raw){
   const p={latitude:raw?.coords?.latitude,longitude:raw?.coords?.longitude,accuracy:raw?.coords?.accuracy,timestamp:raw?.timestamp};
   if(!validPosition(p)||p.timestamp>now()+5000){status='invalid';emit();return false}
