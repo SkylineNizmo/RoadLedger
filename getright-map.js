@@ -33,11 +33,11 @@ const departureInput=$('getrightDepartureTime');
 const fixtureControls=document.createElement('div');fixtureControls.className='actions';
 fixtureControls.innerHTML='<button type="button" id="getrightDemoWeather" class="secondary">Show simulated forecast fixture</button><label><input type="checkbox" id="getrightWeatherVoice"> Speak simulated hazard warnings</label><p id="getrightWeatherAlertStatus" aria-live="polite" class="muted"></p>';
 timeline.append(fixtureControls);
-let fixtureEnabled=false,lastAlert='';
+let fixtureEnabled=false,lastAlert='',lastAlertTime=0;
 $('getrightDemoWeather').onclick=()=>{fixtureEnabled=!fixtureEnabled;lastAlert='';$('getrightDemoWeather').textContent=fixtureEnabled?'Hide simulated forecast fixture':'Show simulated forecast fixture';renderTimeline()};
 function fixtureForecast(sample,index){if(!fixtureEnabled)return null;const hour=Date.parse(sample.arrivalTime),time=new Date(Math.round(hour/3600000)*3600000).toISOString();return window.GetRightRouteWeather.matchHourly(sample,[{time,values:{temperature:2,windGust:index===2?51:18,rainIntensity:index===2?8:0,snowIntensity:0,visibility:index===2?0.7:10}}])}
 function announceDemo(hazards){const el=$('getrightWeatherAlertStatus');if(!hazards.length){el.textContent=fixtureEnabled?'Simulated forecast fixture active. No sample hazard at this point.':'';return}el.textContent='SIMULATED TEST HAZARD — '+hazards.map(h=>h.label).join(', ')+'. Not an official warning.';
- const key=hazards.map(h=>h.code).join(',');if(!$('getrightWeatherVoice').checked||key===lastAlert||!('speechSynthesis'in window))return;lastAlert=key;
+ const key=hazards.map(h=>h.code).join(',');if(!$('getrightWeatherVoice').checked||!('speechSynthesis'in window)||key===lastAlert&&Date.now()-lastAlertTime<1800000)return;lastAlert=key;lastAlertTime=Date.now();
  try{window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance('Simulated test weather warning. '+hazards.map(h=>h.label).join('. '));window.speechSynthesis.speak(utterance)}catch{}
 }
 
@@ -50,7 +50,7 @@ function sampleRoute(points,fraction){if(!Array.isArray(points)||points.length<2
 function renderTimeline(){const rows=$('getrightTimelineRows'),status=$('getrightTimelineStatus');rows.replaceChildren();if(!timelineRoute){status.textContent='No active route. Forecasts and arrival times are unavailable.';return}
  const start=departure();if(start===null){status.textContent='Select a departure time to display SIMULATED timing. No live forecast has been requested.';return}
  const count=Math.min(6,Math.max(2,Math.ceil(timelineRoute.duration/1800)+1));
- const samples=window.GetRightRouteWeather.samples({points:timelineRoute.points,durationSeconds:timelineRoute.duration,departureMs:start,count});
+ let samples;try{samples=window.GetRightRouteWeather.samples({points:timelineRoute.points,durationSeconds:timelineRoute.duration,departureMs:start,count})}catch{status.textContent='Invalid simulated route geometry or duration. Timeline unavailable; no weather forecast requested.';return}
  status.textContent='SIMULATED route timing only — NOT SAFE FOR NAVIGATION. No forecast data is available for these points.';
  const allHazards=[];for(let i=0;i<count;i++){const sample=samples[i],when=new Date(sample.arrivalTime);const row=document.createElement('p');row.className='muted';const match=fixtureForecast(sample,i),hazards=window.GetRightRouteWeather.hazards(match,{simulated:true});row.textContent=Math.round(sample.fraction*100)+'% of sample route · ETA '+when.toLocaleString()+' · sample location '+sample.latitude.toFixed(4)+', '+sample.longitude.toFixed(4)+(match?' · SIMULATED TEST forecast: '+match.values.temperature+'°C, wind gust '+match.values.windGust+' (fixture units), '+hazards.map(h=>h.label).join(', '):' · Weather: unavailable (not forecast)');if(hazards.length)allHazards.push(...hazards);rows.append(row)}
  announceDemo(allHazards);
