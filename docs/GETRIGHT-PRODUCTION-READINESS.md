@@ -35,3 +35,12 @@ Branch: `getright/audit-testing-dev`. **Do not merge or deploy without explicit 
 4. Test Edit Load including payment-history preservation, invalid inputs, cancellation, refresh, duplicate prevention and report recalculation.
 5. Test GPS permission scenarios, radar, forecast labels, equipment, offline service worker and backup recovery.
 6. Produce a private testing ZIP only after essential tests pass. Physical Safari verification separately required.
+
+
+## Latest authenticated checkout investigation
+- Starting branch HEAD: `19867fcfd97194ad78eb209d62a9125d2803a737`.
+- Authenticated GitHub branch API resolved complete Git tree `dc7619952f750d5721c7c10f54e987f8fbf57bb8`: 45 files (~496,188 bytes), untruncated.
+- The local container has Chromium and Python Playwright, but `curl -IL --max-time 8 https://api.github.com/repos/SkylineNizmo/RoadLedger/zipball/getright/audit-testing-dev` failed with `curl: (6) Could not resolve host: api.github.com`.
+- Existing mounted RoadLedger HTML/ZIP files are older prototypes, not this branch. The connector can retrieve text sources but does not expose a local filesystem checkout or binary archive transfer to the execution container.
+- All five repository test files were retrieved and their 20 test callbacks executed against the corresponding fetched sources using an isolated JavaScript compatibility harness: **20 passed, 0 failed**. The harness emulated Node's test/assert/fs/path/vm interfaces and is not equivalent to running `node --test` in a real checkout. Earlier first-pass harness errors (missing structuredClone, VM global binding and incomplete asset inventory) were harness setup errors, corrected before the final 20/20 run.
+- No actual GetRight Chromium application session, native Node test run, physical Safari test, or private verified ZIP was completed. Stage 1 remains blocked pending complete checkout transfer.
