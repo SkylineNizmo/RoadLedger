@@ -37,8 +37,9 @@ function sampleRoute(points,fraction){if(!Array.isArray(points)||points.length<2
 function renderTimeline(){const rows=$('getrightTimelineRows'),status=$('getrightTimelineStatus');rows.replaceChildren();if(!timelineRoute){status.textContent='No active route. Forecasts and arrival times are unavailable.';return}
  const start=departure();if(start===null){status.textContent='Select a departure time to display SIMULATED timing. No live forecast has been requested.';return}
  const count=Math.min(6,Math.max(2,Math.ceil(timelineRoute.duration/1800)+1));
+ const samples=window.GetRightRouteWeather.samples({points:timelineRoute.points,durationSeconds:timelineRoute.duration,departureMs:start,count});
  status.textContent='SIMULATED route timing only — NOT SAFE FOR NAVIGATION. No forecast data is available for these points.';
- for(let i=0;i<count;i++){const fraction=i/(count-1),when=new Date(start+timelineRoute.duration*1000*fraction);const row=document.createElement('p');row.className='muted';const point=sampleRoute(timelineRoute.points,fraction);row.textContent=Math.round(fraction*100)+'% of sample route · ETA '+when.toLocaleString()+(point?' · sample location '+point[0].toFixed(4)+', '+point[1].toFixed(4):'')+' · Weather: unavailable (not forecast)';rows.append(row)}
+ for(let i=0;i<count;i++){const sample=samples[i],when=new Date(sample.arrivalTime);const row=document.createElement('p');row.className='muted';row.textContent=Math.round(sample.fraction*100)+'% of sample route · ETA '+when.toLocaleString()+' · sample location '+sample.latitude.toFixed(4)+', '+sample.longitude.toFixed(4)+' · Weather: unavailable (not forecast)';rows.append(row)}
 }
 window.addEventListener('roadledger:sample-route',e=>{const d=e.detail;timelineRoute=d?.simulation===true&&Number.isFinite(d.duration)&&d.duration>=0?{duration:d.duration,points:Array.isArray(d.points)?d.points:[]}:null;renderTimeline()});
 departureInput.addEventListener('change',renderTimeline);
