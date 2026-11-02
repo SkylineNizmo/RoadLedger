@@ -30,13 +30,17 @@ $('getrightWeatherContents').prepend(timeline);
 const departureInput=$('getrightDepartureTime');
 function departure(){const v=departureInput.value;if(!v)return null;const t=new Date(v).getTime();return Number.isFinite(t)?t:null}
 let timelineRoute=null;
+// Timeline sampling is proportional to the supplied route geometry; the fixed
+// fixture remains a simulation and no weather provider is called here.
+function sampleRoute(points,fraction){if(!Array.isArray(points)||points.length<2)return null;const at=Math.min(points.length-1,Math.max(0,fraction*(points.length-1)));const i=Math.min(points.length-2,Math.floor(at)),t=at-i;return points[i].map((v,j)=>v+(points[i+1][j]-v)*t)}
+
 function renderTimeline(){const rows=$('getrightTimelineRows'),status=$('getrightTimelineStatus');rows.replaceChildren();if(!timelineRoute){status.textContent='No active route. Forecasts and arrival times are unavailable.';return}
  const start=departure();if(start===null){status.textContent='Select a departure time to display SIMULATED timing. No live forecast has been requested.';return}
  const count=Math.min(6,Math.max(2,Math.ceil(timelineRoute.duration/1800)+1));
  status.textContent='SIMULATED route timing only — NOT SAFE FOR NAVIGATION. No forecast data is available for these points.';
- for(let i=0;i<count;i++){const fraction=i/(count-1),when=new Date(start+timelineRoute.duration*1000*fraction);const row=document.createElement('p');row.className='muted';row.textContent=Math.round(fraction*100)+'% of sample route · ETA '+when.toLocaleString()+' · Weather: unavailable (not forecast)';rows.append(row)}
+ for(let i=0;i<count;i++){const fraction=i/(count-1),when=new Date(start+timelineRoute.duration*1000*fraction);const row=document.createElement('p');row.className='muted';const point=sampleRoute(timelineRoute.points,fraction);row.textContent=Math.round(fraction*100)+'% of sample route · ETA '+when.toLocaleString()+(point?' · sample location '+point[0].toFixed(4)+', '+point[1].toFixed(4):'')+' · Weather: unavailable (not forecast)';rows.append(row)}
 }
-window.addEventListener('roadledger:sample-route',e=>{const d=e.detail;timelineRoute=d?.simulation===true&&Number.isFinite(d.duration)&&d.duration>=0?{duration:d.duration}:null;renderTimeline()});
+window.addEventListener('roadledger:sample-route',e=>{const d=e.detail;timelineRoute=d?.simulation===true&&Number.isFinite(d.duration)&&d.duration>=0?{duration:d.duration,points:Array.isArray(d.points)?d.points:[]}:null;renderTimeline()});
 departureInput.addEventListener('change',renderTimeline);
 
 // Persist only presentation state; never rewrite saved equipment or load records.
