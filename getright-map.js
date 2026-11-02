@@ -26,10 +26,8 @@ function openTrip(focus){$('getrightTripPanel').open=true;$(focus).focus();$(foc
 $('getrightPlanTrip').onclick=()=>openTrip('gpsConfirmCombination');
 $('getrightAddStop').onclick=()=>openTrip('routeStopInput');
 destination.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();openTrip('gpsConfirmCombination')}});
-// One radar switch: start loading only after an explicit click; never auto-prompt GPS.
-const toggle=$('radarToggle'),originalToggle=toggle.onclick;
-toggle.setAttribute('aria-pressed','false');$('roadledgerLiveMap').classList.add('radar-overlay-hidden');
-toggle.onclick=()=>{originalToggle();const enabled=toggle.textContent.endsWith('ON');toggle.setAttribute('aria-pressed',String(enabled));if(enabled&&$('radarTimeline').disabled)$('radarRefresh').click()};
+// Radar owns its single overlay control. Do not reset its saved preference or
+// depend on the removed manual refresh button. GPS runs independently.
 function syncEquipment(){
  for(const [target,source] of [['getrightTruck','activeTruck'],['getrightTrailer','activeTrailer']]){
   const from=$(source),to=$(target);to.replaceChildren(...[...from.options].map(option=>option.cloneNode(true)));to.value=from.value;to.disabled=from.disabled;
