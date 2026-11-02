@@ -178,17 +178,30 @@ function renderGPS(s){
  status('roadledgerMapStatus',(map?'':mapIssue+' ')+gpsMessage(s)+(following?' • Follow mode':' • Browse mode')+detail);
  const state=s.status+':'+s.usable;if(state!==lastGPSState&&!s.usable){invalidate('GPS is not fresh and accurate enough. Sample route cleared; get a new fix.');lastGPSState=state}else lastGPSState=state;
 }
+const FOLLOW_KEY='getright-follow-gps-v1';
+try{following=localStorage.getItem(FOLLOW_KEY)!=='false'}catch{following=true}
+function setFollowing(value){following=!!value;try{localStorage.setItem(FOLLOW_KEY,String(following))}catch{}}
 const session=C.createGPS({geolocation:navigator.geolocation,onChange:renderGPS});
+function resumeGPS(){if(!document.hidden&&navigator.onLine!==false&&navigator.geolocation){session.start();renderGPS(session.snapshot())}}
+function autoStartGPS(){
+ if(document.hidden||!navigator.geolocation)return;
+ if(navigator.permissions?.query){
+   navigator.permissions.query({name:'geolocation'}).then(p=>{
+     if(p.state!=='denied')resumeGPS();
+     else status('gpsLocationStatus','GPS permission denied. Enable location in browser settings to track.');
+   }).catch(resumeGPS);
+ }else resumeGPS();
+}
 $('gpsDetectLocation').onclick=()=>session.locate();
-$('gpsStartTracking').onclick=()=>{radarOwnsWatcher=false;following=true;session.start();renderGPS(session.snapshot())};
+$('gpsStartTracking').onclick=()=>{radarOwnsWatcher=false;setFollowing(true);session.start();renderGPS(session.snapshot())};
 $('gpsStopTracking').onclick=()=>stop();
-$('roadledgerFollowGps').onclick=()=>{radarOwnsWatcher=false;following=true;session.start();renderGPS(session.snapshot())};
+$('roadledgerFollowGps').onclick=()=>{radarOwnsWatcher=false;setFollowing(true);session.start();renderGPS(session.snapshot())};
 function loadLeaflet(){
  if(mapReady)return mapReady;
  mapReady=new Promise((resolve,reject)=>{const css=document.createElement('link'),script=document.createElement('script');css.rel='stylesheet';css.href='./vendor/leaflet-1.9.4/leaflet.css';css.integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';css.crossOrigin='anonymous';script.src='./vendor/leaflet-1.9.4/leaflet.js';script.integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';script.crossOrigin='anonymous';let styled=false,loaded=false,done=false;
  const timer=setTimeout(fail,15000);function fail(){if(done)return;done=true;clearTimeout(timer);css.remove();script.remove();mapReady=null;reject(Error('Local map library unavailable. Reload when the application shell is available.'))}function ready(){if(!done&&styled&&loaded){done=true;clearTimeout(timer);resolve()}}css.onload=()=>{styled=true;ready()};css.onerror=fail;script.onload=()=>{if(!window.L)return fail();loaded=true;ready()};script.onerror=fail;document.head.append(css,script)});return mapReady;
 }
-function browse(){following=false;renderGPS(session.snapshot())}
+function browse(){setFollowing(false);renderGPS(session.snapshot())}
 async function initializeMap(){try{await loadLeaflet();map=L.map('roadledgerLiveMap').setView([39.5,-98.35],4);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);map.on('dragstart',browse);const el=$('roadledgerLiveMap');el.addEventListener('pointerdown',browse);el.addEventListener('wheel',browse,{passive:true});el.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','+','-'].includes(e.key))browse()});new ResizeObserver(()=>map.invalidateSize()).observe(el);renderGPS(session.snapshot());drawRoute();resolveSharedMap(map)}catch{rejectSharedMap(Error('Shared map unavailable'));mapIssue='Local map unavailable. GPS coordinates and saved records remain available.';renderGPS(session.snapshot())}}
 let resolveSharedMap,rejectSharedMap;const sharedMap=new Promise((resolve,reject)=>{resolveSharedMap=resolve;rejectSharedMap=reject});sharedMap.catch(()=>{});
 window.RoadLedgerMaps=Object.freeze({ready:loadLeaflet,getMap:()=>sharedMap});
@@ -215,8 +228,8 @@ window.addEventListener('roadledger:saved',()=>queueMicrotask(prefill));
 window.addEventListener('storage',e=>{if(e.key===null||[key,extraKey].includes(e.key)){externalChange=true;$('gpsConfirmCombination').checked=false;invalidate('Records changed in another tab. Reload before planning.');status('gpsEquipmentStatus','Another tab changed equipment or records. Manual trip drafts are retained in this tab.')}});
 function startTicker(){clearInterval(ticker);ticker=setInterval(()=>{if(!document.hidden)renderGPS(session.snapshot())},1000)}
 new MutationObserver(()=>{if(tab.classList.contains('hide'))stop('suspended');else map?.invalidateSize()}).observe(tab,{attributes:true,attributeFilter:['class']});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stop('suspended');else renderGPS(session.snapshot())});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){session.stop('suspended');renderGPS(session.snapshot())}else resumeGPS()});
 window.addEventListener('pagehide',()=>{stop('suspended');clearInterval(ticker)});window.addEventListener('pageshow',()=>{startTicker();renderGPS(session.snapshot())});
 window.RoadLedgerGPS=Object.freeze({snapshot:session.snapshot,startRadarTracking(){if(!session.snapshot().tracking)radarOwnsWatcher=true;session.start()},stopRadarTracking(){if(radarOwnsWatcher){radarOwnsWatcher=false;stop('stopped')}}});
-prefill();renderGPS(session.snapshot());startTicker();initializeMap();
+prefill();renderGPS(session.snapshot());startTicker();initializeMap();autoStartGPS();
 })();
