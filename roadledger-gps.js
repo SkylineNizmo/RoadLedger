@@ -182,7 +182,7 @@ const FOLLOW_KEY='getright-follow-gps-v1';
 try{following=localStorage.getItem(FOLLOW_KEY)!=='false'}catch{following=true}
 function setFollowing(value){following=!!value;try{localStorage.setItem(FOLLOW_KEY,String(following))}catch{}}
 const session=C.createGPS({geolocation:navigator.geolocation,onChange:renderGPS});
-function resumeGPS(){if(!document.hidden&&navigator.onLine!==false&&navigator.geolocation){session.start();renderGPS(session.snapshot())}}
+function resumeGPS(){if(!document.hidden&&!tab.classList.contains('hide')&&navigator.geolocation){session.start();renderGPS(session.snapshot())}}
 function autoStartGPS(){
  if(document.hidden||!navigator.geolocation)return;
  if(navigator.permissions?.query){
@@ -227,9 +227,9 @@ $('gpsPlanRoute').onclick=async()=>{
 window.addEventListener('roadledger:saved',()=>queueMicrotask(prefill));
 window.addEventListener('storage',e=>{if(e.key===null||[key,extraKey].includes(e.key)){externalChange=true;$('gpsConfirmCombination').checked=false;invalidate('Records changed in another tab. Reload before planning.');status('gpsEquipmentStatus','Another tab changed equipment or records. Manual trip drafts are retained in this tab.')}});
 function startTicker(){clearInterval(ticker);ticker=setInterval(()=>{if(!document.hidden)renderGPS(session.snapshot())},1000)}
-new MutationObserver(()=>{if(tab.classList.contains('hide'))stop('suspended');else map?.invalidateSize()}).observe(tab,{attributes:true,attributeFilter:['class']});
+new MutationObserver(()=>{if(tab.classList.contains('hide')){session.stop('suspended');renderGPS(session.snapshot())}else{map?.invalidateSize();resumeGPS()}}).observe(tab,{attributes:true,attributeFilter:['class']});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){session.stop('suspended');renderGPS(session.snapshot())}else resumeGPS()});
-window.addEventListener('pagehide',()=>{stop('suspended');clearInterval(ticker)});window.addEventListener('pageshow',()=>{startTicker();renderGPS(session.snapshot())});
+window.addEventListener('pagehide',()=>{stop('suspended');clearInterval(ticker)});window.addEventListener('pageshow',()=>{startTicker();resumeGPS()});
 window.RoadLedgerGPS=Object.freeze({snapshot:session.snapshot,startRadarTracking(){if(!session.snapshot().tracking)radarOwnsWatcher=true;session.start()},stopRadarTracking(){if(radarOwnsWatcher){radarOwnsWatcher=false;stop('stopped')}}});
-prefill();renderGPS(session.snapshot());startTicker();initializeMap();autoStartGPS();
+prefill();renderGPS(session.snapshot());startTicker();initializeMap();if(!tab.classList.contains('hide'))autoStartGPS();
 })();
