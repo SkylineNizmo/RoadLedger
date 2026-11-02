@@ -178,6 +178,16 @@ function renderGPS(s){
  status('roadledgerMapStatus',(map?'':mapIssue+' ')+gpsMessage(s)+(following?' • Follow mode':' • Browse mode')+detail);
  const state=s.status+':'+s.usable;if(state!==lastGPSState&&!s.usable){invalidate('GPS is not fresh and accurate enough. Sample route cleared; get a new fix.');lastGPSState=state}else lastGPSState=state;
 }
+const ORIENTATION_KEY='getright-map-orientation-v1';
+let orientation='north',lastHeading=null;
+try{if(localStorage.getItem(ORIENTATION_KEY)==='heading')orientation='heading'}catch{}
+const compass=document.createElement('button');compass.id='getrightCompass';compass.type='button';compass.className='secondary';
+compass.setAttribute('aria-label','Switch map orientation');
+function compassLabel(){compass.textContent=orientation==='heading'?'🧭 Heading-up':'🧭 North-up';compass.setAttribute('aria-pressed',String(orientation==='heading'))}
+compassLabel();$('roadledgerFollowGps').after(compass);
+function applyOrientation(){if(!map)return;/* Leaflet 1.9 has no supported map-bearing API. Do not rotate tiles or overlay coordinates unsafely. */
+ if(orientation==='heading')status('roadledgerMapStatus','Heading-up selected; map remains north-up until a bearing-capable map renderer is installed. GPS tracking continues.')}
+compass.onclick=()=>{orientation=orientation==='north'?'heading':'north';try{localStorage.setItem(ORIENTATION_KEY,orientation)}catch{}compassLabel();applyOrientation()};
 const FOLLOW_KEY='getright-follow-gps-v1';
 try{following=localStorage.getItem(FOLLOW_KEY)!=='false'}catch{following=true}
 function setFollowing(value){following=!!value;try{localStorage.setItem(FOLLOW_KEY,String(following))}catch{}}
