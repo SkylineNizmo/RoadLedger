@@ -18,6 +18,8 @@
   let weatherLoading = false;
   let weatherStarted = false;
   let lastWeatherUpdate = 0;
+  let lastSharedFix = null;
+  let lastWeatherCoordinates = null;
 
   const weatherTab=document.getElementById('routeweatherTab');
   if(!weatherTab)return;
@@ -207,7 +209,7 @@
     );
 
     try {
-      const position = await new Promise((resolve, reject) => {
+      const position = !force && lastSharedFix && Date.now()-lastSharedFix.timestamp<60000 ? {coords:lastSharedFix,timestamp:lastSharedFix.timestamp} : await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
           resolve,
           reject,
@@ -221,7 +223,7 @@
 
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
-      window.dispatchEvent(new CustomEvent('roadledger:position',{detail:{latitude,longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp}}));
+      // Shared GPS owns position broadcasts; avoid generating duplicate location events.
       gpsResult.textContent = 'Current GPS: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5) + ' (accuracy ±' + Math.round(position.coords.accuracy) + ' m). Not a navigation route.';
 
       const location = encodeURIComponent(
@@ -244,6 +246,7 @@
       displayWeather(weather, latitude, longitude);
 
       lastWeatherUpdate = Date.now();
+      lastWeatherCoordinates = {latitude,longitude};
 
   } catch (error) {
   clearWeather();
@@ -298,6 +301,17 @@
   }
 
   gpsButton.addEventListener('click',()=>startWeatherUpdates(true));
+  // Follow the shared navigation GPS stream without requesting a second GPS watch.
+  window.addEventListener('roadledger:position',event=>{
+    const fix=event.detail;
+    if(!fix||fix.usable===false||!Number.isFinite(fix.latitude)||!Number.isFinite(fix.longitude))return;
+    lastSharedFix={latitude:fix.latitude,longitude:fix.longitude,accuracy:fix.accuracy,timestamp:fix.timestamp||Date.now()};
+    if(document.hidden||!navigator.onLine)return;
+    const moved=lastWeatherCoordinates&&Math.hypot((fix.latitude-lastWeatherCoordinates.latitude)*69,(fix.longitude-lastWeatherCoordinates.longitude)*55)>15;
+    if(!weatherStarted){startWeatherUpdates()}else if(moved&&Date.now()-lastWeatherUpdate>=300000){updateWeather()}
+  });
+  window.addEventListener('online',()=>{if(weatherStarted)startWeatherUpdates()});
+  window.addEventListener('offline',()=>setText('weatherStatus','Offline — weather readings may be stale. Saved records are available.'));
 
   // Refresh stale weather when returning to RoadLedger.
   document.addEventListener(
