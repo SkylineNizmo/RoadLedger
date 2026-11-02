@@ -22,6 +22,23 @@ planner.querySelector('h2').textContent='Trip setup';
 for(const heading of planner.querySelectorAll('h3'))if(/Destination|Additional Stops/.test(heading.textContent))heading.remove();
 $('getrightWeatherContents').append($('roadledgerRadar'),$('roadledgerWeatherDashboard'));
 document.querySelector('nav [data-tab="routeweather"]').textContent='🗺️ Map & Navigation';
+// Timeline uses only the route's own declared duration. The local fixture is
+// explicitly simulated and never generates weather or commercial route claims.
+const timeline=document.createElement('section');timeline.id='getrightRouteWeatherTimeline';timeline.className='card';
+timeline.innerHTML='<h3>Route weather timeline</h3><p id="getrightTimelineStatus" class="muted">Enter a destination and prepare a route. Live route weather is unavailable until a supported forecast endpoint and real routing are connected.</p><label for="getrightDepartureTime">Departure date and time</label><input id="getrightDepartureTime" type="datetime-local"><div id="getrightTimelineRows"></div>';
+$('getrightWeatherContents').prepend(timeline);
+const departureInput=$('getrightDepartureTime');
+function departure(){const v=departureInput.value;if(!v)return null;const t=new Date(v).getTime();return Number.isFinite(t)?t:null}
+let timelineRoute=null;
+function renderTimeline(){const rows=$('getrightTimelineRows'),status=$('getrightTimelineStatus');rows.replaceChildren();if(!timelineRoute){status.textContent='No active route. Forecasts and arrival times are unavailable.';return}
+ const start=departure();if(start===null){status.textContent='Select a departure time to display SIMULATED timing. No live forecast has been requested.';return}
+ const count=Math.min(6,Math.max(2,Math.ceil(timelineRoute.duration/1800)+1));
+ status.textContent='SIMULATED route timing only — NOT SAFE FOR NAVIGATION. No forecast data is available for these points.';
+ for(let i=0;i<count;i++){const fraction=i/(count-1),when=new Date(start+timelineRoute.duration*1000*fraction);const row=document.createElement('p');row.className='muted';row.textContent=Math.round(fraction*100)+'% of sample route · ETA '+when.toLocaleString()+' · Weather: unavailable (not forecast)';rows.append(row)}
+}
+window.addEventListener('roadledger:sample-route',e=>{const d=e.detail;timelineRoute=d?.simulation===true&&Number.isFinite(d.duration)&&d.duration>=0?{duration:d.duration}:null;renderTimeline()});
+departureInput.addEventListener('change',renderTimeline);
+
 // Persist only presentation state; never rewrite saved equipment or load records.
 const EQUIPMENT_PANEL_KEY='getright-equipment-panel-open';
 const tripPanel=$('getrightTripPanel');
